@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { colors } from '../theme/colors';
+import { useWaveSender } from '../hooks/useWaveSender';
+
 
 function WaveMark({ compact = false }: { compact?: boolean }) {
   const bars = compact ? [12, 18, 26, 18, 10] : [18, 34, 48, 31, 18];
@@ -20,6 +22,7 @@ function WaveMark({ compact = false }: { compact?: boolean }) {
 export default function Home() {
   const [mode, setMode] = useState<'send' | 'receive'>('send');
   const [message, setMessage] = useState('');
+  const wave = useWaveSender();
 
   const switchMode = (next: 'send' | 'receive') => {
     Haptics.selectionAsync();
@@ -98,7 +101,7 @@ export default function Home() {
               <Pressable
                 accessibilityRole="button"
                 style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
-                onPress={() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)}
+                onPress={() => wave.transmit(message, 50)}
               >
                 <Ionicons name="paper-plane" size={18} color="#10131A" />
                 <Text style={styles.primaryText}>Transmit signal</Text>
@@ -113,9 +116,10 @@ export default function Home() {
                 </View>
                 <WaveMark compact />
               </View>
-              <Pressable style={[styles.primaryButton, styles.receiveButton]} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}>
+              {wave.received ? <Text style={styles.receivedText}>{wave.received}</Text> : null}
+              <Pressable style={[styles.primaryButton, styles.receiveButton]} onPress={() => wave.status === 'listening' ? wave.stopListening() : wave.listen()}>
                 <Ionicons name="radio" size={18} color="#10131A" />
-                <Text style={styles.primaryText}>Start receiving</Text>
+                <Text style={styles.primaryText}>{wave.status === 'listening' ? 'Stop receiving' : 'Start receiving'}</Text>
               </Pressable>
             </View>
           )}
@@ -171,4 +175,5 @@ const styles = StyleSheet.create({
   receiveHeader: { minHeight: 92, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   receiveHint: { color: colors.textMuted, fontSize: 13, marginTop: 5 },
   receiveButton: { backgroundColor: colors.lime },
+  receivedText: { marginTop: 12, borderRadius: 14, backgroundColor: '#0C0F15', borderWidth: 1, borderColor: '#26323A', color: colors.text, padding: 14, fontSize: 15 },
 });
