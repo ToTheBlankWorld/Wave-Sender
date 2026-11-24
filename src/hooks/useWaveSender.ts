@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { Alert } from 'react-native';
 import { loadHistory, saveHistory } from '../services/history';
-import { encodeText, ggwave, Protocol, startModem } from '@animatereactnative/ggwave';
+import { decodeText, encodeText, ggwave, Protocol, startModem } from '@animatereactnative/ggwave';
 import { AudioModule, useAudioStream } from 'expo-audio';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { loadSettings } from '../services/settings';
@@ -12,6 +12,7 @@ export type SenderStatus = 'idle' | 'transmitting' | 'listening' | 'decoded' | '
 export function useWaveSender() {
   const [status, setStatus] = useState<SenderStatus>('idle');
   const [received, setReceived] = useState<string>('');
+  const [lastDecoded, setLastDecoded] = useState<string>('');
   const [levels, setLevels] = useState<number[]>(new Array(32).fill(0));
   const transmitAnimationRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const receivedGuard = useRef<string>('');
@@ -43,11 +44,12 @@ export function useWaveSender() {
 
   useEffect(() => {
     ggwave.onMessage = (payload: ArrayBuffer) => {
-      const text = new TextDecoder().decode(payload);
+      const text = decodeText(payload).trim();
       const guard = `${text}:${text.length}`;
       if (!text || guard === receivedGuard.current) return;
       receivedGuard.current = guard;
       setReceived(text);
+      setLastDecoded(text);
       const item = { id: `${Date.now()}-${text.length}`, text, receivedAt: Date.now() };
       loadHistory().then((history) => saveHistory([item, ...history].slice(0, 20)));
       setStatus('decoded');
@@ -150,5 +152,5 @@ export function useWaveSender() {
     setStatus('idle');
   };
 
-  return { status, received, levels, transmit, listen, stopListening };
+  return { status, received, lastDecoded, levels, transmit, listen, stopListening };
 }

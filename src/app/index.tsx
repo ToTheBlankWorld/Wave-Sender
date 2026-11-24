@@ -155,20 +155,28 @@ export default function Home() {
                 </View>
                 <LiveWaveScope compact levels={wave.levels} active={wave.status === 'listening'} variant="receive" />
               </View>
-              {wave.received ? (
+              {wave.lastDecoded ? (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Copy received message"
                   onPress={async () => {
-                    await Clipboard.setStringAsync(wave.received);
+                    await Clipboard.setStringAsync(wave.lastDecoded);
                     Haptics.selectionAsync();
                   }}
                   style={styles.receivedText}
                 >
-                  <Text style={styles.receivedTextInner}>{wave.received}</Text>
-                  <Ionicons name="copy-outline" size={17} color={colors.textMuted} />
+                  <View style={styles.decodedHeader}>
+                    <Text style={styles.decodedLabel}>{wave.status === 'decoded' ? 'Decoded just now' : 'Last decoded'}</Text>
+                    <Ionicons name="copy-outline" size={17} color={colors.textMuted} />
+                  </View>
+                  <Text selectable style={styles.receivedTextInner}>{wave.lastDecoded}</Text>
                 </Pressable>
-              ) : null}
+              ) : (
+                <View style={styles.receivedEmpty}>
+                  <Ionicons name="radio-outline" size={20} color="#596578" />
+                  <Text style={styles.receivedEmptyText}>Decoded text will appear here</Text>
+                </View>
+              )}
               <Pressable style={[styles.primaryButton, styles.receiveButton]} onPress={() => wave.status === 'listening' ? wave.stopListening() : wave.listen()}>
                 <Ionicons name="radio" size={18} color="#10131A" />
                 <Text style={styles.primaryText}>{wave.status === 'listening' ? 'Stop receiving' : 'Start receiving'}</Text>
@@ -235,6 +243,10 @@ const styles = StyleSheet.create({
   receiveHeader: { minHeight: 92, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   receiveHint: { color: colors.textMuted, fontSize: 13, marginTop: 5 },
   receiveButton: { backgroundColor: '#FF6B73' },
-  receivedText: { marginTop: 12, borderRadius: 14, backgroundColor: '#0C0F15', borderWidth: 1, borderColor: '#26323A', padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  receivedTextInner: { flex: 1, color: colors.text, fontSize: 15 },
+  receivedText: { marginTop: 12, borderRadius: 14, backgroundColor: '#0C0F15', borderWidth: 1, borderColor: '#26323A', padding: 14 },
+  decodedHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  decodedLabel: { color: '#FF8D96', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  receivedTextInner: { flex: 1, color: colors.text, fontSize: 15, lineHeight: 22 },
+  receivedEmpty: { minHeight: 58, marginTop: 12, borderRadius: 14, borderWidth: 1, borderColor: '#252C38', backgroundColor: '#0C0F15', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  receivedEmptyText: { color: '#7E899C', fontSize: 12 },
 });
