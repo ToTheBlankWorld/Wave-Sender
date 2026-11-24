@@ -13,6 +13,7 @@ export function useWaveSender() {
   const [status, setStatus] = useState<SenderStatus>('idle');
   const [received, setReceived] = useState<string>('');
   const [levels, setLevels] = useState<number[]>(new Array(32).fill(0));
+  const transmitAnimationRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const receivedGuard = useRef<string>('');
   const stream = useAudioStream({
     sampleRate: 48000,
@@ -80,10 +81,37 @@ export function useWaveSender() {
       ggwave.stop();
       startModem({ protocol, payloadBytes: byteLength, variableLength: false });
       setStatus('transmitting');
+
+      const encodedWaveform = new Float32Array(ggwave.encode(payload, protocol, settings.volume));
+      if (transmitAnimationRef.current) clearInterval(transmitAnimationRef.current);
+      let frame = 0;
+      transmitAnimationRef.current = setInterval(() => {
+        const bands = 32;
+        const next = new Array<number>(bands);
+        const windowSize = Math.max(1, Math.floor(encodedWaveform.length / 32));
+        const startOffset = Math.floor((frame / 24) * windowSize) % Math.max(1, encodedWaveform.length - windowSize);
+        for (let band = 0; band < bands; band += 1) {
+          const start = startOffset + band * 2;
+          let sum = 0;
+          let count = 0;
+          for (let index = start; index < Math.min(start + windowSize, encodedWaveform.length); index += 32) {
+            sum += encodedWaveform[index] * encodedWaveform[index];
+            count += 1;
+          }
+          const rms = count ? Math.sqrt(sum / count) : 0;
+          next[band] = Math.max(0.02, Math.min(1, rms * 3.2));
+        }
+        setLevels(next);
+        frame += 1;
+      }, 42);
+
       if (settings.haptics) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       ggwave.send(payload, settings.volume);
       const duration = ggwave.durationMs(protocol, byteLength, false);
       setTimeout(() => {
+        if (transmitAnimationRef.current) clearInterval(transmitAnimationRef.current);
+        transmitAnimationRef.current = null;
+        setLevels(new Array(32).fill(0));
         ggwave.stop();
         setStatus('idle');
       }, Math.max(duration + 250, 900));

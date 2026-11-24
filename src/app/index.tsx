@@ -10,15 +10,39 @@ import { colors } from '../theme/colors';
 import { useWaveSender } from '../hooks/useWaveSender';
 
 
-function WaveMark({ compact = false, levels = [] }: { compact?: boolean; levels?: number[] }) {
-  const base = compact ? [0.12, 0.18, 0.26, 0.18, 0.10] : [0.06, 0.08, 0.06, 0.10, 0.06];
-  const bars = levels.length ? levels : base;
+function LiveWaveScope({ compact = false, levels = [], active = false, variant = 'receive' }: { compact?: boolean; levels?: number[]; active?: boolean; variant?: 'send' | 'receive' }) {
+  const bars = levels.length ? levels : new Array(compact ? 14 : 48).fill(0);
+  const visible = bars.slice(0, compact ? 14 : 48);
+
+  if (!active && !compact) {
+    return (
+      <View style={styles.idleScope}>
+        {Array.from({ length: 48 }, (_, index) => <View key={index} style={[styles.idleDot, index % 4 === 0 && styles.idleDotStrong]} />)}
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.waveMark, compact && styles.waveMarkCompact]}>
-      {bars.slice(0, compact ? 5 : 32).map((level, index) => {
-        const height = compact ? 10 + level * 48 : 8 + level * 118;
-        return <View key={index} style={[styles.waveBar, { height }, { opacity: 0.45 + level * 0.55 }]} />;
+    <View style={[styles.liveScope, compact && styles.liveScopeCompact]}>
+      {visible.map((level, index) => {
+        const center = visible.length / 2;
+        const mirror = compact ? 1 : 0.72 + Math.abs(index - center) / visible.length * 0.28;
+        const height = compact ? 3 + level * 36 : 4 + level * 112 * mirror;
+        return (
+          <View
+            key={index}
+            style={[
+              styles.liveBar,
+              {
+                height,
+                backgroundColor: variant === 'send' ? '#FFB36B' : '#65C7FF',
+                opacity: 0.35 + level * 0.65,
+              },
+            ]}
+          />
+        );
       })}
+      {active ? <View style={[styles.playhead, variant === 'send' ? styles.playheadSend : styles.playheadReceive]} /> : null}
     </View>
   );
 }
@@ -63,7 +87,7 @@ export default function Home() {
             </View>
 
             <View style={styles.scope}>
-              <WaveMark levels={wave.levels} />
+              <LiveWaveScope levels={wave.levels} active={wave.status === 'transmitting' || wave.status === 'listening'} variant={mode === 'send' ? 'send' : 'receive'} />
               <View style={[styles.scanLine, mode === 'receive' && styles.scanLineReceive]} />
             </View>
 
@@ -127,7 +151,7 @@ export default function Home() {
                   <Text style={styles.panelHeading}>Incoming signal</Text>
                   <Text style={styles.receiveHint}>Hold devices nearby</Text>
                 </View>
-                <WaveMark compact levels={wave.levels} />
+                <LiveWaveScope compact levels={wave.levels} active={wave.status === 'listening'} variant="receive" />
               </View>
               {wave.received ? (
                 <Pressable
@@ -172,9 +196,15 @@ const styles = StyleSheet.create({
   statusText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
   frequency: { color: '#758096', fontSize: 11, fontVariant: ['tabular-nums'] },
   scope: { height: 168, borderRadius: 17, backgroundColor: '#080C10', borderWidth: 1, borderColor: '#26323A', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  waveMark: { height: 130, width: '88%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 3 },
-  waveMarkCompact: { height: 42, width: 86, gap: 2 },
-  waveBar: { width: 3, maxHeight: 126, borderRadius: 2, backgroundColor: colors.cyan },
+  idleScope: { width: '88%', height: 124, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  idleDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: '#26384A', opacity: 0.72 },
+  idleDotStrong: { backgroundColor: '#36526B', opacity: 0.9 },
+  liveScope: { position: 'relative', width: '88%', height: 130, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 2, overflow: 'hidden' },
+  liveScopeCompact: { width: 94, height: 44, gap: 1 },
+  liveBar: { width: 3, minHeight: 3, maxHeight: 126, borderRadius: 2 },
+  playhead: { position: 'absolute', width: 2, height: 112, left: '48%', top: 9, borderRadius: 2, opacity: 0.9 },
+  playheadSend: { backgroundColor: '#FFB36B', shadowColor: '#FFB36B', shadowRadius: 8, shadowOpacity: 0.8 },
+  playheadReceive: { backgroundColor: '#65C7FF', shadowColor: '#65C7FF', shadowRadius: 8, shadowOpacity: 0.8 },
   scanLine: { position: 'absolute', left: 0, right: 0, height: 1, top: 58, backgroundColor: 'rgba(114,231,242,.22)' },
   scanLineReceive: { backgroundColor: 'rgba(184,240,90,.28)' },
   scopeFooter: { height: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
