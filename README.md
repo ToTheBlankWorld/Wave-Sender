@@ -171,4 +171,8 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE).
 
 **Built for offline communication experiments.** 🌊
 
+## 🏆 Account
+
+Repository owner and all new commits: **ToTheBlankWorld**.
+
 </div>
