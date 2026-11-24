@@ -43,11 +43,18 @@ export function useWaveSender() {
       const byteLength = new TextEncoder().encode(trimmed).length;
       if (byteLength > 64) throw new Error('Message exceeds 64 bytes');
       const settings = await loadSettings();
+      const protocol = settings.protocol === 'ultrasound' ? Protocol.ULTRASOUND_FAST : Protocol.AUDIBLE_FAST;
       const payload = encodeText(trimmed, byteLength);
+      ggwave.stop();
+      startModem({ protocol, payloadBytes: byteLength, variableLength: false });
       setStatus('transmitting');
       if (settings.haptics) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       ggwave.send(payload, settings.volume);
-      setTimeout(() => setStatus('idle'), 900);
+      const duration = ggwave.durationMs(protocol, byteLength, false);
+      setTimeout(() => {
+        ggwave.stop();
+        setStatus('idle');
+      }, Math.max(duration + 250, 900));
     } catch (error) {
       setStatus('error');
       Alert.alert('Transmission unavailable', error instanceof Error ? error.message : 'Could not transmit this message');
