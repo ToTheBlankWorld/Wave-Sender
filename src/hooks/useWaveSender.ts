@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { Alert } from 'react-native';
 import { loadHistory, saveHistory } from '../services/history';
 import { encodeText, ggwave, Protocol, startModem } from '@animatereactnative/ggwave';
-import { AudioModule } from 'expo-audio';
+import { AudioModule, useAudioStream } from 'expo-audio';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { loadSettings } from '../services/settings';
 
@@ -12,7 +12,33 @@ export type SenderStatus = 'idle' | 'transmitting' | 'listening' | 'decoded' | '
 export function useWaveSender() {
   const [status, setStatus] = useState<SenderStatus>('idle');
   const [received, setReceived] = useState<string>('');
+  const [levels, setLevels] = useState<number[]>(new Array(32).fill(0));
   const receivedGuard = useRef<string>('');
+  const stream = useAudioStream({
+    sampleRate: 48000,
+    channels: 1,
+    encoding: 'float32',
+    onBuffer: (buffer) => {
+      const data = new Float32Array(buffer.data);
+      if (!data.length) return;
+      const bands = 32;
+      const next = new Array<number>(bands);
+      const bandSize = Math.max(1, Math.floor(data.length / bands));
+      for (let band = 0; band < bands; band += 1) {
+        let sum = 0;
+        const start = band * bandSize;
+        const end = Math.min(start + bandSize, data.length);
+        let count = 0;
+        for (let index = start; index < end; index += 1) {
+          sum += data[index] * data[index];
+          count += 1;
+        }
+        const rms = count ? Math.sqrt(sum / count) : 0;
+        next[band] = Math.max(0.06, Math.min(1, rms * 4.8));
+      }
+      setLevels(next);
+    },
+  });
 
   useEffect(() => {
     ggwave.onMessage = (payload: ArrayBuffer) => {
@@ -78,6 +104,7 @@ export function useWaveSender() {
       const settings = await loadSettings();
       const protocol = settings.protocol === 'ultrasound' ? Protocol.ULTRASOUND_FAST : Protocol.AUDIBLE_FAST;
       startModem({ protocol, variableLength: true, payloadBytes: 64 });
+      await stream.stream.start();
       if (settings.keepScreenAwake) await activateKeepAwakeAsync('wave-sender-listening');
       setStatus('listening');
       if (settings.haptics) Haptics.selectionAsync();
@@ -89,9 +116,11 @@ export function useWaveSender() {
 
   const stopListening = () => {
     ggwave.stop();
+    stream.stream.stop();
+    setLevels(new Array(32).fill(0));
     deactivateKeepAwake('wave-sender-listening');
     setStatus('idle');
   };
 
-  return { status, received, transmit, listen, stopListening };
+  return { status, received, levels, transmit, listen, stopListening };
 }
