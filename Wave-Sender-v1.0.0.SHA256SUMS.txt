@@ -1,0 +1,1 @@
+SHA256  e4f080cc41e63053c4f6eb79740e7bfc23c875ff2eef959c18e2bfd1553a64c4  Wave-Sender-v1.0.0.apk
