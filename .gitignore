@@ -1,0 +1,14 @@
+﻿node_modules/
+android/.gradle/
+android/app/build/
+android/build/
+*.jks
+*.keystore
+*.p8
+*.pem
+.expo/
+dist/
+web-build/
+*.apk
+*.aab
+android/app/*.keystore
