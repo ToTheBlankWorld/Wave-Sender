@@ -3,6 +3,9 @@ import * as Haptics from 'expo-haptics';
 import { Alert } from 'react-native';
 import { loadHistory, saveHistory } from '../services/history';
 import { encodeText, ggwave, Protocol, startModem } from '@animatereactnative/ggwave';
+import { AudioModule } from 'expo-audio';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { loadSettings } from '../services/settings';
 
 export type SenderStatus = 'idle' | 'transmitting' | 'listening' | 'decoded' | 'error';
 
@@ -26,6 +29,7 @@ export function useWaveSender() {
 
     return () => {
       ggwave.stop();
+      deactivateKeepAwake('wave-sender-listening');
     };
   }, []);
 
@@ -38,10 +42,11 @@ export function useWaveSender() {
     try {
       const byteLength = new TextEncoder().encode(trimmed).length;
       if (byteLength > 64) throw new Error('Message exceeds 64 bytes');
+      const settings = await loadSettings();
       const payload = encodeText(trimmed, byteLength);
       setStatus('transmitting');
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      ggwave.send(payload, volume);
+      if (settings.haptics) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      ggwave.send(payload, settings.volume);
       setTimeout(() => setStatus('idle'), 900);
     } catch (error) {
       setStatus('error');
@@ -51,9 +56,18 @@ export function useWaveSender() {
 
   const listen = async () => {
     try {
-      startModem({ protocol: Protocol.AUDIBLE_FAST, variableLength: true, payloadBytes: 140 });
+      const permission = await AudioModule.requestRecordingPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Microphone permission required', 'Allow microphone access to receive nearby sound messages.');
+        setStatus('idle');
+        return;
+      }
+      const settings = await loadSettings();
+      const protocol = settings.protocol === 'ultrasound' ? Protocol.ULTRASOUND_FAST : Protocol.AUDIBLE_FAST;
+      startModem({ protocol, variableLength: true, payloadBytes: 64 });
+      if (settings.keepScreenAwake) await activateKeepAwakeAsync('wave-sender-listening');
       setStatus('listening');
-      Haptics.selectionAsync();
+      if (settings.haptics) Haptics.selectionAsync();
     } catch (error) {
       setStatus('error');
       Alert.alert('Microphone unavailable', error instanceof Error ? error.message : 'Could not start listening');
@@ -62,6 +76,7 @@ export function useWaveSender() {
 
   const stopListening = () => {
     ggwave.stop();
+    deactivateKeepAwake('wave-sender-listening');
     setStatus('idle');
   };
 

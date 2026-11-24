@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import * as Clipboard from 'expo-clipboard';
 import { colors } from '../theme/colors';
 import { useWaveSender } from '../hooks/useWaveSender';
 
@@ -24,6 +25,7 @@ export default function Home() {
   const [mode, setMode] = useState<'send' | 'receive'>('send');
   const [message, setMessage] = useState('');
   const wave = useWaveSender();
+  const byteCount = new TextEncoder().encode(message).length;
 
   const switchMode = (next: 'send' | 'receive') => {
     Haptics.selectionAsync();
@@ -53,7 +55,7 @@ export default function Home() {
             <View style={styles.signalTopline}>
               <View style={styles.statusRow}>
                 <View style={[styles.statusDot, mode === 'send' ? styles.statusSend : styles.statusReceive]} />
-                <Text style={styles.statusText}>{mode === 'send' ? 'Ready to transmit' : 'Listening'}</Text>
+                <Text style={styles.statusText}>{wave.status === 'transmitting' ? 'Transmitting' : wave.status === 'listening' ? 'Listening' : wave.status === 'decoded' ? 'Message received' : wave.status === 'error' ? 'Action failed' : mode === 'send' ? 'Ready to transmit' : 'Ready to listen'}</Text>
               </View>
               <Text style={styles.frequency}>18.4 kHz</Text>
             </View>
@@ -85,7 +87,7 @@ export default function Home() {
             <View style={styles.panel}>
               <View style={styles.panelHeadingRow}>
                 <Text style={styles.panelHeading}>Message</Text>
-                <Text style={styles.counter}>{message.length}/140</Text>
+                <Text style={[styles.counter, byteCount > 64 && styles.counterError]}>{byteCount}/64 bytes</Text>
               </View>
               <TextInput
                 value={message}
@@ -93,7 +95,7 @@ export default function Home() {
                 placeholder="Type a link or note…"
                 placeholderTextColor="#697184"
                 multiline
-                maxLength={140}
+                maxLength={64}
                 style={styles.input}
                 accessibilityLabel="Message to send"
               />
@@ -122,7 +124,20 @@ export default function Home() {
                 </View>
                 <WaveMark compact />
               </View>
-              {wave.received ? <Text style={styles.receivedText}>{wave.received}</Text> : null}
+              {wave.received ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Copy received message"
+                  onPress={async () => {
+                    await Clipboard.setStringAsync(wave.received);
+                    Haptics.selectionAsync();
+                  }}
+                  style={styles.receivedText}
+                >
+                  <Text style={styles.receivedTextInner}>{wave.received}</Text>
+                  <Ionicons name="copy-outline" size={17} color={colors.textMuted} />
+                </Pressable>
+              ) : null}
               <Pressable style={[styles.primaryButton, styles.receiveButton]} onPress={() => wave.status === 'listening' ? wave.stopListening() : wave.listen()}>
                 <Ionicons name="radio" size={18} color="#10131A" />
                 <Text style={styles.primaryText}>{wave.status === 'listening' ? 'Stop receiving' : 'Start receiving'}</Text>
@@ -172,6 +187,7 @@ const styles = StyleSheet.create({
   panelHeadingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   panelHeading: { color: colors.text, fontSize: 15, fontWeight: '800' },
   counter: { color: '#737D91', fontSize: 11, fontVariant: ['tabular-nums'] },
+  counterError: { color: '#FF8E98', fontWeight: '800' },
   input: { minHeight: 112, borderRadius: 16, backgroundColor: '#0C0F15', borderWidth: 1, borderColor: '#252C38', color: colors.text, padding: 14, fontSize: 16, textAlignVertical: 'top' },
   quickRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   quickChip: { borderRadius: 999, backgroundColor: '#1A202B', borderWidth: 1, borderColor: '#2A3140', paddingHorizontal: 12, height: 34, alignItems: 'center', justifyContent: 'center' },
@@ -182,5 +198,6 @@ const styles = StyleSheet.create({
   receiveHeader: { minHeight: 92, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   receiveHint: { color: colors.textMuted, fontSize: 13, marginTop: 5 },
   receiveButton: { backgroundColor: colors.lime },
-  receivedText: { marginTop: 12, borderRadius: 14, backgroundColor: '#0C0F15', borderWidth: 1, borderColor: '#26323A', color: colors.text, padding: 14, fontSize: 15 },
+  receivedText: { marginTop: 12, borderRadius: 14, backgroundColor: '#0C0F15', borderWidth: 1, borderColor: '#26323A', padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  receivedTextInner: { flex: 1, color: colors.text, fontSize: 15 },
 });
