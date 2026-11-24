@@ -54,9 +54,19 @@ export default function Home() {
   const wave = useWaveSender();
   const byteCount = new TextEncoder().encode(message).length;
 
+  const stopReceivingIfActive = () => {
+    if (wave.isListening || wave.isStarting) wave.stopListening();
+  };
+
   const switchMode = (next: 'send' | 'receive') => {
+    if (next === 'send') stopReceivingIfActive();
     Haptics.selectionAsync();
     setMode(next);
+  };
+
+  const openScreen = (path: '/history' | '/settings') => {
+    stopReceivingIfActive();
+    router.push(path);
   };
 
   return (
@@ -69,10 +79,10 @@ export default function Home() {
               <Text style={styles.title}>Wave-Sender</Text>
             </View>
             <View style={styles.headerActions}>
-              <Pressable accessibilityRole="button" accessibilityLabel="Open received history" onPress={() => router.push('/history')} style={styles.iconButton}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Open received history" onPress={() => openScreen('/history')} style={styles.iconButton}>
                 <Ionicons name="time-outline" size={20} color={colors.text} />
               </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Open settings" onPress={() => router.push('/settings')} style={styles.iconButton}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Open settings" onPress={() => openScreen('/settings')} style={styles.iconButton}>
                 <Ionicons name="options-outline" size={21} color={colors.text} />
               </Pressable>
             </View>
@@ -82,13 +92,13 @@ export default function Home() {
             <View style={styles.signalTopline}>
               <View style={styles.statusRow}>
                 <View style={[styles.statusDot, mode === 'send' ? styles.statusSend : styles.statusReceive]} />
-                <Text style={styles.statusText}>{wave.status === 'transmitting' ? 'Transmitting' : wave.status === 'listening' ? 'Listening' : wave.status === 'decoded' ? 'Message received' : wave.status === 'error' ? 'Action failed' : mode === 'send' ? 'Ready to transmit' : 'Ready to listen'}</Text>
+                <Text style={styles.statusText}>{mode === 'send' ? wave.status === 'transmitting' ? 'Transmitting' : wave.status === 'error' ? 'Action failed' : 'Ready to transmit' : wave.isListening ? wave.decodeStatus === 'decoded' ? 'Listening · message received' : 'Listening' : wave.status === 'decoded' ? 'Last message received' : wave.status === 'error' ? 'Action failed' : 'Ready to listen'}</Text>
               </View>
               <Text style={styles.frequency}>18.4 kHz</Text>
             </View>
 
             <View style={styles.scope}>
-              <LiveWaveScope levels={wave.levels} active={wave.status === 'transmitting' || wave.status === 'listening'} variant={mode === 'send' ? 'send' : 'receive'} />
+              <LiveWaveScope levels={wave.levels} active={wave.status === 'transmitting' || wave.isListening} variant={mode === 'send' ? 'send' : 'receive'} />
               <View style={[styles.scanLine, mode === 'receive' && styles.scanLineReceive]} />
             </View>
 
@@ -96,7 +106,7 @@ export default function Home() {
               <Text style={styles.scopeLabel}>CARRIER</Text>
               <LevelMeter
                 level={wave.levels.length ? Math.max(...wave.levels) : 0}
-                active={wave.status === 'transmitting' || wave.status === 'listening'}
+                active={wave.status === 'transmitting' || wave.isListening}
                 label={mode === 'send' ? 'TX' : 'RX'}
               />
               <Text style={styles.scopeLabel}>{mode === 'send' ? 'TX' : 'RX'}</Text>
@@ -153,7 +163,7 @@ export default function Home() {
                   <Text style={styles.panelHeading}>Incoming signal</Text>
                   <Text style={styles.receiveHint}>Hold devices nearby</Text>
                 </View>
-                <LiveWaveScope compact levels={wave.levels} active={wave.status === 'listening'} variant="receive" />
+                <LiveWaveScope compact levels={wave.levels} active={wave.isListening} variant="receive" />
               </View>
               {wave.lastDecoded ? (
                 <Pressable
@@ -177,9 +187,14 @@ export default function Home() {
                   <Text style={styles.receivedEmptyText}>Decoded text will appear here</Text>
                 </View>
               )}
-              <Pressable style={[styles.primaryButton, styles.receiveButton]} onPress={() => wave.status === 'listening' ? wave.stopListening() : wave.listen()}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={wave.isStarting}
+                style={[styles.primaryButton, styles.receiveButton, wave.isStarting && styles.receiveButtonDisabled]}
+                onPress={() => wave.isListening ? wave.stopListening() : wave.listen()}
+              >
                 <Ionicons name="radio" size={18} color="#10131A" />
-                <Text style={styles.primaryText}>{wave.status === 'listening' ? 'Stop receiving' : 'Start receiving'}</Text>
+                <Text style={styles.primaryText}>{wave.isStarting ? 'Starting…' : wave.isListening ? 'Stop receiving' : 'Start receiving'}</Text>
               </Pressable>
             </View>
           )}
@@ -243,6 +258,7 @@ const styles = StyleSheet.create({
   receiveHeader: { minHeight: 92, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   receiveHint: { color: colors.textMuted, fontSize: 13, marginTop: 5 },
   receiveButton: { backgroundColor: '#FF6B73' },
+  receiveButtonDisabled: { opacity: 0.55 },
   receivedText: { marginTop: 12, borderRadius: 14, backgroundColor: '#0C0F15', borderWidth: 1, borderColor: '#26323A', padding: 14 },
   decodedHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   decodedLabel: { color: '#FF8D96', fontSize: 10, fontWeight: '900', letterSpacing: 1 },

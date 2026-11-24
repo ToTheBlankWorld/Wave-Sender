@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Alert } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Alert } from 'react-native';
 import { loadHistory, saveHistory } from '../services/history';
 import { decodeText, encodeText, ggwave, Protocol, startModem } from '@animatereactnative/ggwave';
 import { AudioModule, useAudioStream } from 'expo-audio';
@@ -11,17 +11,26 @@ export type SenderStatus = 'idle' | 'transmitting' | 'listening' | 'decoded' | '
 
 export function useWaveSender() {
   const [status, setStatus] = useState<SenderStatus>('idle');
+  const [isListening, setIsListening] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [received, setReceived] = useState<string>('');
   const [lastDecoded, setLastDecoded] = useState<string>('');
   const [decodeStatus, setDecodeStatus] = useState<'waiting' | 'decoded' | 'stopped'>('waiting');
   const [levels, setLevels] = useState<number[]>(new Array(32).fill(0));
   const transmitAnimationRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const transmitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const receivedGuard = useRef<string>('');
+  const listeningRef = useRef(false);
+  const startingRef = useRef(false);
+  const permissionPromptRef = useRef(false);
+  const listenGenerationRef = useRef(0);
+  const lastDecodedRef = useRef('');
   const stream = useAudioStream({
     sampleRate: 48000,
     channels: 1,
     encoding: 'float32',
     onBuffer: (buffer) => {
+      if (!listeningRef.current) return;
       const data = new Float32Array(buffer.data);
       if (!data.length) return;
       const bands = 32;
@@ -43,15 +52,42 @@ export function useWaveSender() {
     },
   });
 
+  const releaseAudio = useCallback(() => {
+    listeningRef.current = false;
+    if (transmitAnimationRef.current) clearInterval(transmitAnimationRef.current);
+    if (transmitTimeoutRef.current) clearTimeout(transmitTimeoutRef.current);
+    transmitAnimationRef.current = null;
+    transmitTimeoutRef.current = null;
+    ggwave.stop();
+    stream.stream?.stop();
+    deactivateKeepAwake('wave-sender-listening');
+  }, [stream.stream]);
+
+  const stopListening = useCallback(() => {
+    listenGenerationRef.current += 1;
+    startingRef.current = false;
+    permissionPromptRef.current = false;
+    setIsStarting(false);
+    releaseAudio();
+    setIsListening(false);
+    setLevels(new Array(32).fill(0));
+    setDecodeStatus(lastDecodedRef.current ? 'stopped' : 'waiting');
+    setStatus(lastDecodedRef.current ? 'decoded' : 'idle');
+  }, [releaseAudio]);
+
   useEffect(() => {
+    releaseAudio();
     ggwave.onMessage = (payload: ArrayBuffer) => {
+      if (!listeningRef.current) return;
       const text = decodeText(payload).trim();
       const guard = `${text}:${text.length}`;
       if (!text || guard === receivedGuard.current) return;
       receivedGuard.current = guard;
+      lastDecodedRef.current = text;
       setReceived(text);
       setLastDecoded(text);
       setDecodeStatus('decoded');
+      setIsListening(true);
       const item = { id: `${Date.now()}-${text.length}`, text, receivedAt: Date.now() };
       loadHistory().then((history) => saveHistory([item, ...history].slice(0, 20)));
       setStatus('decoded');
@@ -59,10 +95,22 @@ export function useWaveSender() {
     };
 
     return () => {
-      ggwave.stop();
-      deactivateKeepAwake('wave-sender-listening');
+      listenGenerationRef.current += 1;
+      listeningRef.current = false;
+      startingRef.current = false;
+      ggwave.onMessage = undefined;
+      releaseAudio();
     };
-  }, []);
+  }, [releaseAudio]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' && (listeningRef.current || (startingRef.current && !permissionPromptRef.current))) {
+        stopListening();
+      }
+    });
+    return () => subscription.remove();
+  }, [stopListening]);
 
   const transmit = async (text: string, volume = 50) => {
     const trimmed = text.trim();
@@ -70,6 +118,7 @@ export function useWaveSender() {
       Alert.alert('Add a message', 'Enter text or a link before transmitting.');
       return;
     }
+    if (listeningRef.current || startingRef.current) stopListening();
     try {
       const permission = await AudioModule.requestRecordingPermissionsAsync();
       if (!permission.granted) {
@@ -83,12 +132,13 @@ export function useWaveSender() {
       const protocol = settings.protocol === 'ultrasound' ? Protocol.ULTRASOUND_FAST : Protocol.AUDIBLE_FAST;
       const payload = encodeText(trimmed, 64);
       ggwave.stop();
-      ggwave.allowSelfReception = __DEV__;
+      ggwave.allowSelfReception = false;
       startModem({ protocol, payloadBytes: 64, variableLength: false });
       setStatus('transmitting');
 
       const encodedWaveform = new Float32Array(ggwave.encode(payload, protocol, settings.volume));
       if (transmitAnimationRef.current) clearInterval(transmitAnimationRef.current);
+      if (transmitTimeoutRef.current) clearTimeout(transmitTimeoutRef.current);
       let frame = 0;
       transmitAnimationRef.current = setInterval(() => {
         const bands = 32;
@@ -113,7 +163,8 @@ export function useWaveSender() {
       if (settings.haptics) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       ggwave.send(payload, settings.volume);
       const duration = ggwave.durationMs(protocol, 64, false);
-      setTimeout(() => {
+      transmitTimeoutRef.current = setTimeout(() => {
+        transmitTimeoutRef.current = null;
         if (transmitAnimationRef.current) clearInterval(transmitAnimationRef.current);
         transmitAnimationRef.current = null;
         setLevels(new Array(32).fill(0));
@@ -121,43 +172,73 @@ export function useWaveSender() {
         setStatus('idle');
       }, Math.max(duration + 250, 900));
     } catch (error) {
+      releaseAudio();
       setStatus('error');
       Alert.alert('Transmission unavailable', error instanceof Error ? error.message : 'Could not transmit this message');
     }
   };
 
   const listen = async () => {
+    if (listeningRef.current || startingRef.current) return;
+    const generation = ++listenGenerationRef.current;
+    startingRef.current = true;
+    permissionPromptRef.current = true;
+    setIsStarting(true);
     try {
       const permission = await AudioModule.requestRecordingPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Microphone permission required', 'Allow microphone access to receive nearby sound messages.');
+      permissionPromptRef.current = false;
+      if (generation !== listenGenerationRef.current) return;
+      if (AppState.currentState !== 'active') {
+        releaseAudio();
         setStatus('idle');
         return;
       }
+      if (!permission.granted) {
+        releaseAudio();
+        setIsListening(false);
+        setLevels(new Array(32).fill(0));
+        setStatus('idle');
+        Alert.alert('Microphone permission required', 'Allow microphone access to receive nearby sound messages.');
+        return;
+      }
       const settings = await loadSettings();
+      if (generation !== listenGenerationRef.current) return;
       const protocol = settings.protocol === 'ultrasound' ? Protocol.ULTRASOUND_FAST : Protocol.AUDIBLE_FAST;
-      ggwave.allowSelfReception = __DEV__;
+      releaseAudio();
+      ggwave.allowSelfReception = false;
+      listeningRef.current = true;
       startModem({ protocol, variableLength: false, payloadBytes: 64 });
       receivedGuard.current = '';
       setDecodeStatus('waiting');
-      await stream.stream.start();
+      await stream.stream?.start();
+      if (generation !== listenGenerationRef.current) {
+        releaseAudio();
+        return;
+      }
       if (settings.keepScreenAwake) await activateKeepAwakeAsync('wave-sender-listening');
+      if (generation !== listenGenerationRef.current) {
+        releaseAudio();
+        return;
+      }
+      setIsListening(true);
       setStatus('listening');
       if (settings.haptics) Haptics.selectionAsync();
     } catch (error) {
+      permissionPromptRef.current = false;
+      if (generation !== listenGenerationRef.current) return;
+      releaseAudio();
+      setIsListening(false);
+      setLevels(new Array(32).fill(0));
       setStatus('error');
       Alert.alert('Microphone unavailable', error instanceof Error ? error.message : 'Could not start listening');
+    } finally {
+      permissionPromptRef.current = false;
+      if (generation === listenGenerationRef.current) {
+        startingRef.current = false;
+        setIsStarting(false);
+      }
     }
   };
 
-  const stopListening = () => {
-    ggwave.stop();
-    stream.stream.stop();
-    setLevels(new Array(32).fill(0));
-    deactivateKeepAwake('wave-sender-listening');
-    setDecodeStatus(lastDecoded ? 'stopped' : 'waiting');
-    setStatus(lastDecoded ? 'decoded' : 'idle');
-  };
-
-  return { status, received, lastDecoded, decodeStatus, levels, transmit, listen, stopListening };
+  return { status, isListening, isStarting, received, lastDecoded, decodeStatus, levels, transmit, listen, stopListening };
 }
