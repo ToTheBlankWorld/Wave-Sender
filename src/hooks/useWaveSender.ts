@@ -40,6 +40,12 @@ export function useWaveSender() {
       return;
     }
     try {
+      const permission = await AudioModule.requestRecordingPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Microphone permission required', 'Allow microphone access to transmit this sound message.');
+        setStatus('idle');
+        return;
+      }
       const byteLength = new TextEncoder().encode(trimmed).length;
       if (byteLength > 64) throw new Error('Message exceeds 64 bytes');
       const settings = await loadSettings();
