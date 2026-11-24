@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { colors } from '../theme/colors';
 import { useWaveSender } from '../hooks/useWaveSender';
@@ -38,9 +39,14 @@ export default function Home() {
               <Text style={styles.eyebrow}>OFFLINE CHANNEL</Text>
               <Text style={styles.title}>Wave-Sender</Text>
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="Open settings" style={styles.iconButton}>
-              <Ionicons name="options-outline" size={21} color={colors.text} />
-            </Pressable>
+            <View style={styles.headerActions}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Open received history" onPress={() => router.push('/history')} style={styles.iconButton}>
+                <Ionicons name="time-outline" size={20} color={colors.text} />
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Open settings" onPress={() => router.push('/settings')} style={styles.iconButton}>
+                <Ionicons name="options-outline" size={21} color={colors.text} />
+              </Pressable>
+            </View>
           </View>
 
           <View style={styles.signalCard}>
@@ -135,6 +141,7 @@ const styles = StyleSheet.create({
   header: { height: 84, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   eyebrow: { color: colors.cyan, fontSize: 10, fontWeight: '800', letterSpacing: 1.8, marginBottom: 3 },
   title: { color: colors.text, fontSize: 25, fontWeight: '800', letterSpacing: -0.7 },
+  headerActions: { flexDirection: 'row', gap: 8 },
   iconButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
   signalCard: { backgroundColor: '#10141B', borderRadius: 24, borderWidth: 1, borderColor: colors.line, padding: 14 },
   signalTopline: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingHorizontal: 2 },
