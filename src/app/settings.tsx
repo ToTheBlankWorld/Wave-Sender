@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import Slider from '@react-native-community/slider';
+
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { colors } from '../theme/colors';
+import { Knob } from '../components/audio/Knob';
 import { AppSettings, DEFAULT_SETTINGS, loadSettings, saveSettings } from '../services/settings';
 
 export default function SettingsScreen() {
@@ -39,15 +40,21 @@ export default function SettingsScreen() {
             <Text style={styles.label}>Output volume</Text>
             <Text style={styles.value}>{settings.volume}%</Text>
           </View>
-          <Slider
-            value={settings.volume}
-            minimumValue={5}
-            maximumValue={100}
-            minimumTrackTintColor={colors.coral}
-            maximumTrackTintColor={colors.line}
-            thumbTintColor={colors.text}
-            onSlidingComplete={(value) => update({ volume: Math.round(value) })}
-          />
+          <View style={styles.knobRow}>
+            <Knob
+              value={settings.volume}
+              min={5}
+              max={100}
+              step={1}
+              label="Volume"
+              onChange={(volume) => update({ volume })}
+            />
+            <View style={styles.levelPreview}>
+              {Array.from({ length: 12 }, (_, index) => (
+                <View key={index} style={[styles.levelPreviewSegment, index / 12 <= settings.volume / 100 && styles.levelPreviewActive]} />
+              ))}
+            </View>
+          </View>
         </View>
 
         <View style={styles.card}>
@@ -112,6 +119,10 @@ const styles = StyleSheet.create({
   segmentActive: { backgroundColor: colors.surfaceRaised, borderWidth: 1, borderColor: colors.line },
   segmentText: { color: colors.textMuted, fontSize: 13, fontWeight: '800' },
   segmentTextActive: { color: colors.text },
+  knobRow: { height: 112, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 8 },
+  levelPreview: { flex: 1, height: 10, marginLeft: 28, flexDirection: 'row', gap: 3, alignItems: 'center' },
+  levelPreviewSegment: { flex: 1, height: 8, borderRadius: 2, backgroundColor: '#252B36' },
+  levelPreviewActive: { backgroundColor: '#65A7FF' },
   switchRow: { height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   divider: { height: 1, backgroundColor: colors.line },
   reset: { height: 52, borderRadius: 16, borderWidth: 1, borderColor: '#4A3032', backgroundColor: '#241719', alignItems: 'center', justifyContent: 'center', marginTop: 4 },

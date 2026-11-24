@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { colors } from '../theme/colors';
 import { useWaveSender } from '../hooks/useWaveSender';
+import { LevelMeter } from '../components/audio/LevelMeter';
 
 
 function LiveWaveScope({ compact = false, levels = [], active = false, variant = 'receive' }: { compact?: boolean; levels?: number[]; active?: boolean; variant?: 'send' | 'receive' }) {
@@ -93,11 +94,12 @@ export default function Home() {
 
             <View style={styles.scopeFooter}>
               <Text style={styles.scopeLabel}>CARRIER</Text>
-              <View style={styles.levels}>{[1, 2, 3, 4, 5, 6, 7].map((n) => {
-                const peak = wave.levels.length ? Math.max(...wave.levels) : 0;
-                return <View key={n} style={[styles.level, n / 7 <= peak && styles.levelActive]} />;
-              })}</View>
-              <Text style={styles.scopeLabel}>-18 dB</Text>
+              <LevelMeter
+                level={wave.levels.length ? Math.max(...wave.levels) : 0}
+                active={wave.status === 'transmitting' || wave.status === 'listening'}
+                label={mode === 'send' ? 'TX' : 'RX'}
+              />
+              <Text style={styles.scopeLabel}>{mode === 'send' ? 'TX' : 'RX'}</Text>
             </View>
           </View>
 
@@ -191,8 +193,8 @@ const styles = StyleSheet.create({
   signalTopline: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingHorizontal: 2 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusSend: { backgroundColor: colors.coral },
-  statusReceive: { backgroundColor: colors.lime },
+  statusSend: { backgroundColor: '#65A7FF' },
+  statusReceive: { backgroundColor: '#FF6B73' },
   statusText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
   frequency: { color: '#758096', fontSize: 11, fontVariant: ['tabular-nums'] },
   scope: { height: 168, borderRadius: 17, backgroundColor: '#080C10', borderWidth: 1, borderColor: '#26323A', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
@@ -214,8 +216,8 @@ const styles = StyleSheet.create({
   levelActive: { backgroundColor: colors.cyan },
   segment: { height: 62, marginTop: 14, padding: 5, borderRadius: 18, backgroundColor: colors.surface, flexDirection: 'row', borderWidth: 1, borderColor: colors.line },
   segmentButton: { flex: 1, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
-  segmentActiveSend: { backgroundColor: colors.coral },
-  segmentActiveReceive: { backgroundColor: colors.lime },
+  segmentActiveSend: { backgroundColor: '#65A7FF' },
+  segmentActiveReceive: { backgroundColor: '#FF6B73' },
   segmentText: { color: colors.textMuted, fontSize: 14, fontWeight: '800' },
   segmentTextActive: { color: '#10131A' },
   panel: { marginTop: 14, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, padding: 16 },
@@ -227,12 +229,12 @@ const styles = StyleSheet.create({
   quickRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   quickChip: { borderRadius: 999, backgroundColor: '#1A202B', borderWidth: 1, borderColor: '#2A3140', paddingHorizontal: 12, height: 34, alignItems: 'center', justifyContent: 'center' },
   quickText: { color: '#BBC2CF', fontSize: 12, fontWeight: '700' },
-  primaryButton: { height: 54, borderRadius: 16, backgroundColor: colors.coral, marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 },
+  primaryButton: { height: 54, borderRadius: 16, backgroundColor: '#65A7FF', marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 },
   primaryButtonPressed: { transform: [{ scale: 0.985 }], opacity: 0.9 },
   primaryText: { color: '#10131A', fontSize: 15, fontWeight: '900' },
   receiveHeader: { minHeight: 92, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   receiveHint: { color: colors.textMuted, fontSize: 13, marginTop: 5 },
-  receiveButton: { backgroundColor: colors.lime },
+  receiveButton: { backgroundColor: '#FF6B73' },
   receivedText: { marginTop: 12, borderRadius: 14, backgroundColor: '#0C0F15', borderWidth: 1, borderColor: '#26323A', padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   receivedTextInner: { flex: 1, color: colors.text, fontSize: 15 },
 });

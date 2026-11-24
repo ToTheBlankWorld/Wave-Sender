@@ -125,7 +125,7 @@ android/app/build/outputs/apk/release/app-release.apk
 Downloaded APKs should match the release checksum:
 
 ```text
-SHA-256: ed8d907ad13159fc970a7a981fe3db3b69d9f8631c353736fe5ceaaca0d01da5
+SHA-256: 160ef08d5341641f1e03efe9334215b25479e7cb726267deafac18788cdbdf57
 ```
 
 ## 🧪 Quality Status
