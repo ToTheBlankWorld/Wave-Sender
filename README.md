@@ -7,7 +7,7 @@
 [![Platform](https://img.shields.io/badge/platform-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/ToTheBlankWorld/Wave-Sender)
 [![Framework](https://img.shields.io/badge/framework-React%20Native-61DAFB?style=for-the-badge&logo=react&logoColor=0A0A0A)](https://reactnative.dev)
 [![Expo](https://img.shields.io/badge/Expo-SDK%2058-000020?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev)
-[![Release](https://img.shields.io/badge/release-v1.0.0-FF7A69?style=for-the-badge)](https://github.com/ToTheBlankWorld/Wave-Sender/releases/latest)
+[![Release](https://img.shields.io/badge/release-v1.0.1-FF7A69?style=for-the-badge)](https://github.com/ToTheBlankWorld/Wave-Sender/releases/latest)
 
 **Send short messages and links through encoded audio waves.**
 <br />Two nearby phones. One transmission. Zero network infrastructure.
@@ -26,9 +26,12 @@ Wave-Sender converts short text into audio signals using the **ggwave** data-ove
 
 Perfect for demonstrations, offline communication experiments, nearby handoffs, and environments where ordinary network connectivity is unavailable or unwanted.
 
-## 🚀 Latest Release — v1.0.0
+## 🚀 Latest Release — v1.0.1
 
 - 📡 Native ggwave data-over-sound transmission
+- Explicit receive lifecycle: microphone capture starts only after **Start receiving**
+- Capture stops on Stop, mode changes, navigation, backgrounding, and errors
+- Fresh microphone permission flow fixed
 - 🎧 Microphone-backed receive mode with runtime Android permission
 - 🔊 Audible and ultrasound protocol options
 - 📲 Persistent received-message history
@@ -53,10 +56,12 @@ Perfect for demonstrations, offline communication experiments, nearby handoffs, 
 ## 📱 Android Installation
 
 1. Open the **latest release** page.
-2. Download `Wave-Sender-v1.0.0.apk`.
+2. Download `Wave-Sender-v1.0.1.apk`.
 3. On Android, enable installation from your browser/file manager if prompted.
 4. Install and open **Wave-Sender**.
 5. To receive, grant microphone permission and press **Start receiving**.
+
+> ⚠️ **Upgrading from v1.0.0:** v1.0.1 uses a new signing key. Uninstall the old app first or Android will block the update. Uninstalling removes local history and settings.
 
 > ⚠️ Keep both devices nearby, moderately loud, and away from heavy environmental noise.
 
@@ -125,16 +130,19 @@ android/app/build/outputs/apk/release/app-release.apk
 Downloaded APKs should match the release checksum:
 
 ```text
-SHA-256: 41bb370c86841489a92096953d3d63ad05ac17c3187de24f1536f83806b3e791
+SHA-256: 08afd14f2d96539fba8365a87aa6239b3351d94c4cf4bca5e6e4f2e778315261
 ```
+
+Release certificate SHA-256: `0c5e522d27838e422a440acc6e8628313380c860680f6aae9f03ea53111c8901`
 
 ## 🧪 Quality Status
 
-- ✅ Expo Doctor: 20/20 checks passing
+- ✅ Expo Doctor: 19/20 checks passing (native/app-config sync warning)
 - ✅ TypeScript: passing
 - ✅ ESLint: passing
 - ✅ Android emulator build: installed and tested
 - ✅ Receive permission flow: verified
+- ✅ Emulator lifecycle tests: cold launch, Start/Stop, mode switch, navigation, and backgrounding verified
 - ✅ Settings and history navigation: verified
 - ✅ No high-confidence security findings in the app source review
 

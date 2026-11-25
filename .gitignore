@@ -12,3 +12,4 @@ web-build/
 *.apk
 *.aab
 android/app/*.keystore
+session-*.md
