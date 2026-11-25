@@ -2,6 +2,7 @@ import { ArrowUpRight, Menu, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { BrandMark, GithubMark } from './brand-mark'
+import { useWaveStore } from '@/store/wave-store'
 
 const navigation = [
   { to: '/', label: 'Overview' },
@@ -14,10 +15,15 @@ export function SiteLayout() {
   const [openMenuPath, setOpenMenuPath] = useState<string | null>(null)
   const location = useLocation()
   const menuOpen = openMenuPath === location.pathname
+  const { stopReceiving } = useWaveStore()
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' })
   }, [location.pathname])
+
+  useEffect(() => {
+    if (location.pathname !== '/studio') stopReceiving()
+  }, [location.pathname, stopReceiving])
 
   return (
     <div className="site-shell">

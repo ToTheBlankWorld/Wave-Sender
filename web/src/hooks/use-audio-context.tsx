@@ -21,7 +21,14 @@ export const getSharedAudioContext = (): AudioContext | null => {
     return null;
   }
   if (!sharedContext || sharedContext.state === "closed") {
-    sharedContext = new AudioContext({ latencyHint: "interactive" });
+    try {
+      sharedContext = new AudioContext({
+        latencyHint: "interactive",
+        sampleRate: 48_000,
+      });
+    } catch {
+      sharedContext = new AudioContext({ latencyHint: "interactive" });
+    }
   }
   return sharedContext;
 };
