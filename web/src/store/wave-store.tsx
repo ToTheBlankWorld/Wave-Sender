@@ -8,10 +8,21 @@ import {
   useState,
 } from 'react'
 import type { ReactNode } from 'react'
-import { useAudioAnalyser } from '@/hooks/use-audio-analyser'
+import { createAnalyserTap } from '@/hooks/use-audio-analyser'
 import { useAudioDevices, type AudioPermission } from '@/hooks/use-audio-devices'
 import { useMicrophone } from '@/hooks/use-microphone'
-import { bytesAsFloats, floatsAsBytes, loadGgwave, protocolFor } from '@/lib/ggwave'
+import { createFrameRelay } from '@/lib/audio/frame-source'
+import type { FrameSource, VisualFrame } from '@/lib/audio/types'
+import {
+  GGWAVE_SAMPLE_RATE,
+  bytesAsFloats,
+  createAudioFramePipeline,
+  createGgwaveInstance,
+  decodePayloadText,
+  floatsAsBytes,
+  loadGgwave,
+  protocolFor,
+} from '@/lib/ggwave'
 import { getSharedAudioContext } from '@/hooks/use-audio-context'
 import { loadHistory, saveHistory, type ReceivedMessage } from '@/services/history'
 import { loadSettings, saveSettings, type WaveSettings } from '@/services/settings'
@@ -22,7 +33,10 @@ interface DecoderNodes {
   source: MediaStreamAudioSourceNode
   processor: ScriptProcessorNode
   silence: GainNode
+  tap: ReturnType<typeof createAnalyserTap>
   ownedContext: AudioContext | null
+  variableInstance: number
+  fixedInstance: number
 }
 
 interface WaveStoreValue {
@@ -34,7 +48,7 @@ interface WaveStoreValue {
   lastDecoded: string | null
   history: ReceivedMessage[]
   settings: WaveSettings
-  visualSource: ReturnType<typeof useAudioAnalyser>['visual']
+  visualSource: FrameSource<VisualFrame>
   devices: ReturnType<typeof useAudioDevices>['devices']
   devicePermission: AudioPermission
   isLoadingDevices: boolean
@@ -48,8 +62,9 @@ interface WaveStoreValue {
 }
 
 const WaveStoreContext = createContext<WaveStoreValue | null>(null)
-const textDecoder = new TextDecoder()
 const MAX_PAYLOAD_BYTES = 64
+const FIXED_PAYLOAD_BYTES = 64
+const TX_ENCODE_VOLUME = 35
 
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : 'The audio operation could not be completed.'
@@ -65,22 +80,40 @@ export function WaveStoreProvider({ children }: { children: ReactNode }) {
   const [lastDecoded, setLastDecoded] = useState<string | null>(null)
 
   const historyRef = useRef(history)
+  const hapticsRef = useRef(settings.haptics)
   const receivingRef = useRef(false)
   const startingRef = useRef(false)
   const generationRef = useRef(0)
-  const instanceRef = useRef<number | null>(null)
-  const instanceSampleRateRef = useRef<number | null>(null)
   const decoderRef = useRef<DecoderNodes | null>(null)
   const transmitSourceRef = useRef<AudioBufferSourceNode | null>(null)
   const transmitGainRef = useRef<GainNode | null>(null)
   const transmitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastDecodedRef = useRef<{ text: string; at: number } | null>(null)
+  const dedupRef = useRef<{ text: string; at: number } | null>(null)
+  const visualRelay = useMemo(() => createFrameRelay<VisualFrame>(), [])
+
+  useEffect(() => {
+    hapticsRef.current = settings.haptics
+  }, [settings.haptics])
+
+  const deviceList = useAudioDevices({ kind: 'audioinput' })
+
+  const commitHistory = useCallback((next: ReceivedMessage[]) => {
+    historyRef.current = next
+    setHistory(next)
+    saveHistory(next)
+  }, [])
+
+  const stopMicrophoneRef = useRef<(() => void) | null>(null)
 
   const handleMicrophoneError = useCallback(
     (microphoneStatus: 'denied' | 'unavailable' | 'error', microphoneError: Error) => {
       if (!startingRef.current) return
       startingRef.current = false
+      receivingRef.current = false
+      stopMicrophoneRef.current?.()
       setIsStarting(false)
+      setIsReceiving(false)
       setStatus('error')
       setError(
         microphoneStatus === 'denied'
@@ -101,62 +134,29 @@ export function WaveStoreProvider({ children }: { children: ReactNode }) {
   })
   const stopMicrophone = microphone.stop
   const startMicrophone = microphone.start
-  const analyser = useAudioAnalyser(microphone.stream, {
-    bands: 32,
-    fftSize: 2048,
-    enabled: isReceiving,
-  })
-  const deviceList = useAudioDevices({ kind: 'audioinput' })
 
-  const commitHistory = useCallback((next: ReceivedMessage[]) => {
-    historyRef.current = next
-    setHistory(next)
-    saveHistory(next)
-  }, [])
+  useEffect(() => {
+    stopMicrophoneRef.current = stopMicrophone
+  }, [stopMicrophone])
 
   const releaseDecoder = useCallback(() => {
+    visualRelay.setSource(null)
     const decoder = decoderRef.current
     if (!decoder) return
+    decoderRef.current = null
     decoder.processor.onaudioprocess = null
+    decoder.tap.dispose()
     decoder.source.disconnect()
     decoder.processor.disconnect()
     decoder.silence.disconnect()
     if (decoder.ownedContext) void decoder.ownedContext.close()
-    decoderRef.current = null
-  }, [])
-
-  const freeInstance = useCallback(async () => {
-    if (instanceRef.current === null) return
-    const instance = instanceRef.current
-    instanceRef.current = null
-    instanceSampleRateRef.current = null
-    try {
-      const ggwave = await loadGgwave()
-      ggwave.free(instance)
-    } catch {
-      // The module may still be loading during teardown.
-    }
-  }, [])
-
-  const ensureInstance = useCallback(async (requestedContext?: AudioContext) => {
-    const context = requestedContext ?? getSharedAudioContext()
-    if (!context) throw new Error('This browser does not support Web Audio.')
-    if (context.state === 'suspended') await context.resume()
-    const ggwave = await loadGgwave()
-    if (
-      instanceRef.current === null ||
-      instanceSampleRateRef.current !== context.sampleRate
-    ) {
-      await freeInstance()
-      const parameters = ggwave.getDefaultParameters()
-      parameters.sampleRateInp = context.sampleRate
-      parameters.sampleRateOut = context.sampleRate
-      parameters.sampleRate = context.sampleRate
-      instanceRef.current = ggwave.init(parameters)
-      instanceSampleRateRef.current = context.sampleRate
-    }
-    return { context, ggwave, instance: instanceRef.current }
-  }, [freeInstance])
+    void loadGgwave().then((ggwave) => {
+      ggwave.free(decoder.variableInstance)
+      ggwave.free(decoder.fixedInstance)
+    }).catch(() => {
+      // Module teardown is best-effort.
+    })
+  }, [visualRelay])
 
   const stopTransmitting = useCallback(() => {
     if (transmitTimerRef.current) clearTimeout(transmitTimerRef.current)
@@ -181,17 +181,17 @@ export function WaveStoreProvider({ children }: { children: ReactNode }) {
     startingRef.current = false
     releaseDecoder()
     stopMicrophone()
-    void freeInstance()
     setIsReceiving(false)
     setIsStarting(false)
     setStatus(lastDecodedRef.current ? 'decoded' : 'idle')
-  }, [freeInstance, releaseDecoder, stopMicrophone])
+  }, [releaseDecoder, stopMicrophone])
 
   const startReceiving = useCallback(() => {
     if (receivingRef.current || startingRef.current) return
     stopTransmitting()
     const generation = ++generationRef.current
     startingRef.current = true
+    dedupRef.current = null
     setIsStarting(true)
     setError(null)
     setStatus('starting')
@@ -234,6 +234,8 @@ export function WaveStoreProvider({ children }: { children: ReactNode }) {
 
       const connectDecoder = async () => {
         let ownedContext: AudioContext | null = null
+        let variableInstance: number | null = null
+        let fixedInstance: number | null = null
         try {
           const sharedContext = getSharedAudioContext()
           if (!sharedContext) throw new Error('This browser does not support Web Audio.')
@@ -243,31 +245,55 @@ export function WaveStoreProvider({ children }: { children: ReactNode }) {
             : null
           const context = ownedContext ?? sharedContext
           if (context.state === 'suspended') await context.resume()
-          const { ggwave, instance } = await ensureInstance(context)
+          const ggwave = await loadGgwave()
           if (cancelled || generation !== generationRef.current) {
             if (ownedContext) void ownedContext.close()
             return
           }
+          variableInstance = createGgwaveInstance(ggwave, -1)
+          fixedInstance = createGgwaveInstance(ggwave, FIXED_PAYLOAD_BYTES)
+
           releaseDecoder()
           const source = context.createMediaStreamSource(stream)
+          const tap = createAnalyserTap(context, source, {
+            bands: 32,
+            fftSize: 2048,
+          })
+          visualRelay.setSource(tap.visual)
+
           const processor = context.createScriptProcessor(1024, 1, 1)
           const silence = context.createGain()
           silence.gain.value = 0
           source.connect(processor)
           processor.connect(silence)
           silence.connect(context.destination)
-          decoderRef.current = { source, processor, silence, ownedContext }
 
-          processor.onaudioprocess = (event) => {
+          const activeVariable = variableInstance
+          const activeFixed = fixedInstance
+          decoderRef.current = {
+            source,
+            processor,
+            silence,
+            tap,
+            ownedContext,
+            variableInstance: activeVariable,
+            fixedInstance: activeFixed,
+          }
+
+          const pushAudioChunk = createAudioFramePipeline(context.sampleRate, (frame) => {
             if (!receivingRef.current || generation !== generationRef.current) return
-            const samples = new Float32Array(event.inputBuffer.getChannelData(0))
-            const decoded = ggwave.decode(instance, floatsAsBytes(samples))
-            if (!decoded.length) return
-            const text = textDecoder.decode(decoded).trim()
+            const bytes = floatsAsBytes(frame)
+            const varDecoded = ggwave.decode(activeVariable, bytes)
+            let text = decodePayloadText(varDecoded)
+            if (!text) {
+              const fixDecoded = ggwave.decode(activeFixed, bytes)
+              text = decodePayloadText(fixDecoded)
+            }
             if (!text) return
             const now = Date.now()
-            const previous = lastDecodedRef.current
+            const previous = dedupRef.current
             if (previous?.text === text && now - previous.at < 1500) return
+            dedupRef.current = { text, at: now }
             lastDecodedRef.current = { text, at: now }
             setLastDecoded(text)
             setStatus('decoded')
@@ -277,7 +303,12 @@ export function WaveStoreProvider({ children }: { children: ReactNode }) {
               receivedAt: now,
             }
             commitHistory([item, ...historyRef.current].slice(0, 20))
-            if (settings.haptics) navigator.vibrate?.(35)
+            if (hapticsRef.current) navigator.vibrate?.(35)
+          })
+
+          processor.onaudioprocess = (event) => {
+            if (!receivingRef.current || generation !== generationRef.current) return
+            pushAudioChunk(event.inputBuffer.getChannelData(0))
           }
 
           receivingRef.current = true
@@ -295,6 +326,14 @@ export function WaveStoreProvider({ children }: { children: ReactNode }) {
           if (ownedContext && decoderRef.current?.ownedContext !== ownedContext) {
             void ownedContext.close()
           }
+          if (!decoderRef.current) {
+            void loadGgwave().then((ggwave) => {
+              if (variableInstance !== null) ggwave.free(variableInstance)
+              if (fixedInstance !== null) ggwave.free(fixedInstance)
+            }).catch(() => {
+              // Best-effort cleanup.
+            })
+          }
           releaseDecoder()
           stopMicrophone()
           setIsReceiving(false)
@@ -309,15 +348,13 @@ export function WaveStoreProvider({ children }: { children: ReactNode }) {
         cancelled = true
       }
     }
-
   }, [
     commitHistory,
-    ensureInstance,
     microphone.status,
     microphone.stream,
     releaseDecoder,
-    settings.haptics,
     stopMicrophone,
+    visualRelay,
   ])
 
   const transmit = useCallback(async (text: string) => {
@@ -333,12 +370,16 @@ export function WaveStoreProvider({ children }: { children: ReactNode }) {
     setError(null)
     setStatus('transmitting')
 
+    let txInstance: number | null = null
     try {
-      const { context, ggwave, instance } = await ensureInstance()
+      const context = getSharedAudioContext()
+      if (!context) throw new Error('This browser does not support Web Audio.')
       if (context.state === 'suspended') await context.resume()
-      const waveform = ggwave.encode(instance, payload, protocolFor(ggwave, settings.protocol), 10)
+      const ggwave = await loadGgwave()
+      txInstance = createGgwaveInstance(ggwave, -1)
+      const waveform = ggwave.encode(txInstance, payload, protocolFor(ggwave, settings.protocol), TX_ENCODE_VOLUME)
       const samples = bytesAsFloats(waveform)
-      const buffer = context.createBuffer(1, samples.length, context.sampleRate)
+      const buffer = context.createBuffer(1, samples.length, GGWAVE_SAMPLE_RATE)
       buffer.getChannelData(0).set(samples)
       const source = context.createBufferSource()
       const gain = context.createGain()
@@ -361,14 +402,20 @@ export function WaveStoreProvider({ children }: { children: ReactNode }) {
         stopTransmitting()
         setStatus(lastDecodedRef.current ? 'decoded' : 'idle')
       }, buffer.duration * 1000 + 150)
-      await freeInstance()
     } catch (transmitError) {
       stopTransmitting()
       setStatus('error')
       setError(errorMessage(transmitError))
       throw transmitError
+    } finally {
+      if (txInstance !== null) {
+        const toFree = txInstance
+        void loadGgwave().then((ggwave) => ggwave.free(toFree)).catch(() => {
+          // Best-effort cleanup.
+        })
+      }
     }
-  }, [ensureInstance, freeInstance, isTransmitting, settings.protocol, settings.volume, stopReceiving, stopTransmitting])
+  }, [isTransmitting, settings.protocol, settings.volume, stopReceiving, stopTransmitting])
 
   const updateSettings = useCallback((patch: Partial<WaveSettings>) => {
     if (patch.inputDeviceId !== undefined && patch.inputDeviceId !== settings.inputDeviceId) {
@@ -387,6 +434,7 @@ export function WaveStoreProvider({ children }: { children: ReactNode }) {
 
   const clearHistory = useCallback(() => {
     lastDecodedRef.current = null
+    dedupRef.current = null
     setLastDecoded(null)
     commitHistory([])
     if (!receivingRef.current) setStatus('idle')
@@ -431,8 +479,7 @@ export function WaveStoreProvider({ children }: { children: ReactNode }) {
     releaseDecoder()
     stopMicrophone()
     stopTransmitting()
-    void freeInstance()
-  }, [freeInstance, releaseDecoder, stopMicrophone, stopTransmitting])
+  }, [releaseDecoder, stopMicrophone, stopTransmitting])
 
   const value = useMemo<WaveStoreValue>(() => ({
     status,
@@ -443,7 +490,7 @@ export function WaveStoreProvider({ children }: { children: ReactNode }) {
     lastDecoded,
     history,
     settings,
-    visualSource: analyser.visual,
+    visualSource: visualRelay,
     devices: deviceList.devices,
     devicePermission: deviceList.permission,
     isLoadingDevices: deviceList.isLoading,
@@ -455,7 +502,6 @@ export function WaveStoreProvider({ children }: { children: ReactNode }) {
     clearHistory,
     requestDevicePermission: deviceList.requestPermission,
   }), [
-    analyser.visual,
     deviceList.devices,
     deviceList.isLoading,
     deviceList.permission,
@@ -474,6 +520,7 @@ export function WaveStoreProvider({ children }: { children: ReactNode }) {
     stopReceiving,
     transmit,
     updateSettings,
+    visualRelay,
   ])
 
   return <WaveStoreContext.Provider value={value}>{children}</WaveStoreContext.Provider>

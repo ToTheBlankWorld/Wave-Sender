@@ -21,6 +21,7 @@ declare module 'ggwave' {
     free: (instance: number) => void
     encode: (instance: number, payload: string, protocol: unknown, volume: number) => Int8Array
     decode: (instance: number, audio: Int8Array) => Int8Array
+    disableLog?: () => void
   }
 
   export default function ggwaveFactory(): Promise<GgwaveModule>

@@ -851,6 +851,7 @@ button {
   background: rgba(8, 31, 39, 0.94);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
   font-size: 0.82rem;
+  overflow-wrap: anywhere;
   backdrop-filter: blur(12px);
 }
 
@@ -1865,7 +1866,8 @@ button {
 
 .status-idle,
 .status-listening,
-.status-receiving {
+.status-receiving,
+.status-decoded {
   color: var(--primary);
 }
 

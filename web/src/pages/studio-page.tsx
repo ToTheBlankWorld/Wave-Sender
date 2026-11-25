@@ -231,6 +231,16 @@ export function StudioPage() {
                 </button>
               </div>
 
+              {store.lastDecoded && (
+                <div className="decoded-result" role="status" aria-live="polite">
+                  <div className="decoded-result-top">
+                    <span><Check size={15} /> Message decoded</span>
+                    <button type="button" onClick={copyDecoded}>{copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy'}</button>
+                  </div>
+                  <p>{store.lastDecoded}</p>
+                </div>
+              )}
+
               <div className="control-block device-block">
                 <label className="field-label" htmlFor="wave-microphone">Microphone</label>
                 <AudioDeviceSelect
@@ -248,16 +258,6 @@ export function StudioPage() {
                   </AudioDeviceSelectTrigger>
                 </AudioDeviceSelect>
               </div>
-
-              {store.lastDecoded && (
-                <div className="decoded-result" role="status" aria-live="polite">
-                  <div className="decoded-result-top">
-                    <span><Check size={15} /> Message decoded</span>
-                    <button type="button" onClick={copyDecoded}>{copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy'}</button>
-                  </div>
-                  <p>{store.lastDecoded}</p>
-                </div>
-              )}
 
               <Link className="text-link" to="/history">Open received history <ArrowUpRight size={15} /></Link>
             </>
@@ -295,9 +295,15 @@ export function StudioPage() {
                 lineWidth={2.2}
               />
             )}
+            {mode === 'receive' && store.lastDecoded && (
+              <div className="decoded-message" aria-live="polite">
+                <span className="decoded-check"><Check size={15} /></span>
+                <span>{store.lastDecoded}</span>
+              </div>
+            )}
             <div className="monitor-readout">
               <span>{mode === 'send' ? store.settings.protocol : receiveActive ? 'MIC 01' : 'MIC —'}</span>
-              <span>{mode === 'send' ? `${bytes} bytes` : receiveActive ? 'Native rate' : 'No capture'}</span>
+              <span>{mode === 'send' ? `${bytes} bytes` : receiveActive ? '48 kHz decoder' : store.lastDecoded ? 'Decoded' : 'No capture'}</span>
             </div>
           </div>
           {monitorAnimated && (
