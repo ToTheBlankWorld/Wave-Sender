@@ -1,9 +1,9 @@
-import ggwaveFactory, { type GgwaveModule } from 'ggwave'
+import type { GgwaveModule } from 'ggwave'
 
 let modulePromise: Promise<GgwaveModule> | null = null
 
 export const loadGgwave = () => {
-  modulePromise ??= ggwaveFactory()
+  modulePromise ??= import('ggwave').then((module) => module.default())
   return modulePromise
 }
 

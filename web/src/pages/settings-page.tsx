@@ -1,6 +1,10 @@
 import { Eye, Mic, Radio, Trash2, Vibrate, Volume2, Waves } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { AudioDeviceSelect } from '@/components/ui/audio-device-select'
+import {
+  AudioDeviceSelect,
+  AudioDeviceSelectTrigger,
+  AudioDeviceSelectValue,
+} from '@/components/ui/audio-device-select'
 import { VolumeControl } from '@/components/ui/volume-control'
 import { useWaveStore } from '@/store/wave-store'
 
@@ -68,7 +72,7 @@ export function SettingsPage() {
       <div className="settings-group">
         <h2>Audio</h2>
         <SettingRow icon={<Waves size={19} />} title="Protocol" description="Audible is the most compatible. Ultrasound needs supporting hardware.">
-          <div className="protocol-switch settings-protocol" aria-label="Default protocol">
+          <div className="protocol-switch settings-protocol" role="group" aria-label="Default protocol">
             <button type="button" aria-pressed={store.settings.protocol === 'audible'} onClick={() => store.updateSettings({ protocol: 'audible' })}>Audible</button>
             <button type="button" aria-pressed={store.settings.protocol === 'ultrasound'} onClick={() => store.updateSettings({ protocol: 'ultrasound' })}>Ultrasound</button>
           </div>
@@ -77,6 +81,7 @@ export function SettingsPage() {
           <VolumeControl value={store.settings.volume} onValueChange={(volume) => store.updateSettings({ volume })} curve="perceptual" aria-label="Default playback volume" />
         </SettingRow>
         <SettingRow icon={<Mic size={19} />} title="Microphone" description="Choose an input or use the system default.">
+          <label className="sr-only" htmlFor="settings-microphone">Microphone</label>
           <AudioDeviceSelect
             devices={deviceOptions}
             value={store.settings.inputDeviceId}
@@ -86,7 +91,11 @@ export function SettingsPage() {
             loading={store.isLoadingDevices}
             permission={store.devicePermission === 'unsupported' ? 'prompt' : store.devicePermission}
             onRequestPermission={() => void store.requestDevicePermission()}
-          />
+          >
+            <AudioDeviceSelectTrigger id="settings-microphone">
+              <AudioDeviceSelectValue />
+            </AudioDeviceSelectTrigger>
+          </AudioDeviceSelect>
         </SettingRow>
       </div>
 

@@ -4,7 +4,7 @@
 
 **Offline text delivery over sound — no Wi-Fi, Bluetooth, pairing, or account required.**
 
-[![Platform](https://img.shields.io/badge/platform-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/ToTheBlankWorld/Wave-Sender)
+[![Platform](https://img.shields.io/badge/platform-Android%20%2B%20Web-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/ToTheBlankWorld/Wave-Sender)
 [![Framework](https://img.shields.io/badge/framework-React%20Native-61DAFB?style=for-the-badge&logo=react&logoColor=0A0A0A)](https://reactnative.dev)
 [![Expo](https://img.shields.io/badge/Expo-SDK%2058-000020?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev)
 [![Release](https://img.shields.io/badge/release-v1.0.1-FF7A69?style=for-the-badge)](https://github.com/ToTheBlankWorld/Wave-Sender/releases/latest)
@@ -51,6 +51,8 @@ Perfect for demonstrations, offline communication experiments, nearby handoffs, 
 | Audio codec | ggwave native Nitro module |
 | Storage | AsyncStorage |
 | Android | Gradle / Android SDK |
+| Web | React 19, Vite, React Router, Tailwind CSS, AudioCN |
+| Browser audio | Web Audio API, ggwave WASM |
 | Language | TypeScript |
 
 ## 📱 Android Installation
@@ -112,6 +114,27 @@ npx expo lint
 npx expo-doctor
 ```
 
+### Run the web app
+
+The browser version lives in `web/` and runs independently from the Expo app.
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Open the local Vite URL, then use **Studio** to transmit or receive. Microphone capture starts only after **Start receiving**. Received messages and preferences are stored in browser local storage.
+
+### Validate the web app
+
+```bash
+cd web
+npm run lint
+npm run typecheck
+npm run build
+```
+
 ### Build release APK
 
 ```bash
@@ -145,15 +168,18 @@ Release certificate SHA-256: `0c5e522d27838e422a440acc6e8628313380c860680f6aae9f
 - ✅ Emulator lifecycle tests: cold launch, Start/Stop, mode switch, navigation, and backgrounding verified
 - ✅ Settings and history navigation: verified
 - ✅ No high-confidence security findings in the app source review
+- ✅ Web lint, TypeScript, and production build: passing
+- ✅ Web desktop/mobile layouts and reduced-motion behavior: verified
+- ✅ Browser transmit, native-rate decode loopback, permission denial, and capture cleanup: verified
 
 ## 🗂️ Project Structure
 
 ```text
 src/
 ├── app/
-│   ├── index.tsx       # Send / receive experience
-│   ├── history.tsx     # Received message history
-│   └── settings.tsx    # App preferences
+│   ├── index.tsx       # Native send / receive experience
+│   ├── history.tsx     # Native received-message history
+│   └── settings.tsx    # Native app preferences
 ├── hooks/
 │   └── useWaveSender.ts
 ├── services/
@@ -161,13 +187,23 @@ src/
 │   └── settings.ts
 └── theme/
     └── colors.ts
+
+web/
+├── src/
+│   ├── pages/          # Overview, Studio, History, and Settings screens
+│   ├── components/     # AudioCN controls and animated instruments
+│   ├── hooks/          # Microphone, analyser, devices, and demo signals
+│   ├── lib/            # ggwave binding and audio utilities
+│   ├── services/       # Validated local settings and history
+│   └── store/          # Browser messenger lifecycle
+└── public/             # Local fonts and favicon
 ```
 
 ## 🔐 Privacy
 
-Wave-Sender does not require an account or remote backend. Messages are transmitted through audio and received history is stored locally on the device.
+Wave-Sender does not require an account or remote backend. Messages are transmitted through audio and received history is stored locally on the device or in the current browser.
 
-The app requests microphone access only for receive mode. No message or location data is uploaded by the app itself.
+The Android app and web studio request microphone access only for receive mode. No message or location data is uploaded by the app itself.
 
 ## 📄 License
 

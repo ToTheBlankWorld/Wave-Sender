@@ -1,18 +1,22 @@
-import { Ear, Radio, Volume2, Waves } from 'lucide-react'
+import { Ear, Pause, Play, Radio, Volume2, Waves } from 'lucide-react'
 import { useState } from 'react'
 import { BarVisualizer } from '@/components/ui/bar-visualizer'
 import { SmoothWaveform } from '@/components/ui/smooth-waveform'
 import { useDemoSignal } from '@/hooks/use-demo-signal'
+import { useReducedMotion } from '@/hooks/use-reduced-motion'
 import { WaveBackdrop } from '@/components/wave-backdrop'
 
 type Protocol = 'audible' | 'ultrasound'
 
 export function ProtocolLab() {
   const [protocol, setProtocol] = useState<Protocol>('audible')
+  const [paused, setPaused] = useState(false)
+  const reduceMotion = useReducedMotion()
   const signal = useDemoSignal({
     kind: protocol === 'audible' ? 'speech' : 'tone',
     bands: 40,
     seed: protocol === 'audible' ? 4 : 9,
+    playing: !paused && !reduceMotion,
   })
 
   return (
@@ -37,25 +41,42 @@ export function ProtocolLab() {
       <div className="protocol-screen">
         <div className="protocol-screen-top">
           <span><Radio size={14} /> {protocol === 'audible' ? 'Everyday audio band' : 'High-frequency channel'}</span>
-          <span>{protocol === 'audible' ? 'Open air' : 'Low distraction'}</span>
+          <div className="protocol-preview-actions">
+            <span>{protocol === 'audible' ? 'Open air' : 'Low distraction'}</span>
+            {!reduceMotion && (
+              <button
+                className="preview-toggle"
+                type="button"
+                aria-label={paused ? 'Resume protocol preview' : 'Pause protocol preview'}
+                aria-pressed={paused}
+                onClick={() => setPaused((value) => !value)}
+              >
+                {paused ? <Play size={14} /> : <Pause size={14} />}
+              </button>
+            )}
+          </div>
         </div>
         <WaveBackdrop className={protocol === 'ultrasound' ? 'text-accent' : 'text-primary'} />
-        <SmoothWaveform
-          aria-label={`${protocol} signal waveform`}
-          className={`protocol-waveform ${protocol === 'ultrasound' ? 'text-accent' : 'text-primary'}`}
-          source={signal.visual}
-          mode={protocol === 'audible' ? 'wave' : 'scope'}
-          sensitivity={protocol === 'audible' ? 1.1 : 1.45}
-          lineWidth={2}
-        />
-        <BarVisualizer
-          aria-label={`${protocol} frequency spectrum`}
-          className={`protocol-spectrum ${protocol === 'ultrasound' ? 'text-accent' : 'text-primary'}`}
-          source={signal.visual}
-          barCount={36}
-          align="center"
-          mirrored
-        />
+        {!paused && !reduceMotion && (
+          <>
+            <SmoothWaveform
+              aria-label={`${protocol} signal waveform`}
+              className={`protocol-waveform ${protocol === 'ultrasound' ? 'text-accent' : 'text-primary'}`}
+              source={signal.visual}
+              mode={protocol === 'audible' ? 'wave' : 'scope'}
+              sensitivity={protocol === 'audible' ? 1.1 : 1.45}
+              lineWidth={2}
+            />
+            <BarVisualizer
+              aria-label={`${protocol} frequency spectrum`}
+              className={`protocol-spectrum ${protocol === 'ultrasound' ? 'text-accent' : 'text-primary'}`}
+              source={signal.visual}
+              barCount={36}
+              align="center"
+              mirrored
+            />
+          </>
+        )}
       </div>
 
       <div className="protocol-description">

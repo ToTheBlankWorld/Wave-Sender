@@ -137,7 +137,7 @@ export const AudioDeviceSelectItem = ({
           ) : null}
         </span>
         {device?.description ? (
-          <span className="text-muted-foreground text-xs">
+          <span className="text-muted-foreground break-words text-xs">
             {device.description}
           </span>
         ) : null}

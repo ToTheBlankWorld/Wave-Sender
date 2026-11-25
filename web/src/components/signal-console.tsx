@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { Check, LoaderCircle, Radio, RotateCcw, Waves } from 'lucide-react'
+import { Check, LoaderCircle, Pause, Play, Radio, RotateCcw, Waves } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useReducedMotion } from '@/hooks/use-reduced-motion'
 import { BarVisualizer } from '@/components/ui/bar-visualizer'
@@ -18,12 +18,14 @@ export function SignalConsole() {
   const [phase, setPhase] = useState<Phase>('idle')
   const [volume, setVolume] = useState(0.72)
   const [muted, setMuted] = useState(false)
+  const [previewPaused, setPreviewPaused] = useState(false)
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
   const reduceMotion = useReducedMotion()
   const signal = useDemoSignal({
     kind: phase === 'transmitting' ? 'tone' : 'speech',
     bands: 32,
     gainDb: muted ? Number.NEGATIVE_INFINITY : -8 + volume * 8,
+    playing: !previewPaused && !reduceMotion,
   })
 
   useEffect(() => () => {
@@ -56,31 +58,46 @@ export function SignalConsole() {
     <div className="signal-console hero-instrument">
       <div className="instrument-topline">
         <span><Radio size={15} /> Live signal console</span>
-        <span className={`console-state state-${phase}`}>
-          <span className="status-dot" /> {statusLabel}
-        </span>
+        <div className="instrument-topline-actions">
+          <span className={`console-state state-${phase}`} role="status" aria-live="polite">
+            <span className="status-dot" /> {statusLabel}
+          </span>
+          {!reduceMotion && (
+            <button
+              className="preview-toggle"
+              type="button"
+              aria-label={previewPaused ? 'Resume signal preview' : 'Pause signal preview'}
+              aria-pressed={previewPaused}
+              onClick={() => setPreviewPaused((paused) => !paused)}
+            >
+              {previewPaused ? <Play size={14} /> : <Pause size={14} />}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="wave-stage">
         <div className="wave-grid" aria-hidden="true" />
         <WaveBackdrop className="text-primary" />
         <div className="scope-label" aria-hidden="true">CH 01</div>
-        <SmoothWaveform
-          aria-label="Animated encoded audio waveform"
-          className="signal-waveform text-primary h-48 w-full"
-          source={signal.visual}
-          mode={phase === 'transmitting' ? 'scope' : 'wave'}
-          sensitivity={phase === 'transmitting' ? 1.55 : 1.2}
-          lineWidth={2.5}
-        />
+        {!previewPaused && !reduceMotion && (
+          <SmoothWaveform
+            aria-label="Animated encoded audio waveform"
+            className="signal-waveform text-primary h-48 w-full"
+            source={signal.visual}
+            mode={phase === 'transmitting' ? 'scope' : 'wave'}
+            sensitivity={phase === 'transmitting' ? 1.55 : 1.2}
+            lineWidth={2.5}
+          />
+        )}
         <AnimatePresence>
           {phase === 'received' && (
             <motion.div
               className="decoded-message"
               initial={reduceMotion ? false : { opacity: 0, y: 12, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.28 }}
+              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
+              transition={{ duration: reduceMotion ? 0 : 0.28 }}
             >
               <span className="decoded-check"><Check size={15} /></span>
               <span>{demoMessage}</span>
@@ -93,20 +110,22 @@ export function SignalConsole() {
         </div>
       </div>
 
-      <div className="signal-spectrum">
-        <BarVisualizer
-          aria-label="Animated signal frequency spectrum"
-          className="text-primary h-14 w-full"
-          source={signal.visual}
-          barCount={32}
-          align="center"
-          mirrored
-          idle="pulse"
-        />
-      </div>
+      {!previewPaused && !reduceMotion && (
+        <div className="signal-spectrum">
+          <BarVisualizer
+            aria-label="Animated signal frequency spectrum"
+            className="text-primary h-14 w-full"
+            source={signal.visual}
+            barCount={32}
+            align="center"
+            mirrored
+            idle="pulse"
+          />
+        </div>
+      )}
 
       <div className="console-settings">
-        <div className="protocol-switch" aria-label="Signal protocol">
+        <div className="protocol-switch" role="group" aria-label="Signal protocol">
           <button
             type="button"
             aria-pressed={protocol === 'audible'}

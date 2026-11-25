@@ -45,6 +45,7 @@ export function HistoryPage() {
       </header>
 
       {error && <div className="studio-error" role="alert">{error}</div>}
+      <span className="sr-only" role="status" aria-live="polite">{copiedId ? 'Message copied.' : ''}</span>
 
       {history.length === 0 ? (
         <section className="empty-history">
@@ -66,7 +67,14 @@ export function HistoryPage() {
                 <button className="icon-button" type="button" aria-label="Copy message" onClick={() => void copyMessage(item.id, item.text)}>
                   {copiedId === item.id ? <Check size={17} /> : <Copy size={17} />}
                 </button>
-                <button className="icon-button" type="button" aria-label="Delete message" onClick={() => removeMessage(item.id)}>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Delete message"
+                  onClick={() => {
+                    if (window.confirm('Delete this received message?')) removeMessage(item.id)
+                  }}
+                >
                   <Trash2 size={17} />
                 </button>
               </div>
