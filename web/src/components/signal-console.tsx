@@ -53,6 +53,7 @@ export function SignalConsole() {
     transmitting: 'Signal in the air',
     received: 'Message received',
   }[phase]
+  const toneClass = protocol === 'ultrasound' ? 'text-accent' : 'text-primary'
 
   return (
     <div className="signal-console hero-instrument">
@@ -76,16 +77,16 @@ export function SignalConsole() {
         </div>
       </div>
 
-      <div className="wave-stage">
+      <div className={`wave-stage ${phase === 'transmitting' ? 'is-active' : ''}`}>
         <div className="wave-grid" aria-hidden="true" />
-        <WaveBackdrop className="text-primary" />
-        <div className="scope-label" aria-hidden="true">CH 01</div>
+        <WaveBackdrop className={toneClass} />
+        <div className="scope-label" aria-hidden="true">{protocol === 'ultrasound' ? 'CH 02 · HF' : 'CH 01'}</div>
         {!previewPaused && !reduceMotion && (
           <SmoothWaveform
             aria-label="Animated encoded audio waveform"
-            className="signal-waveform text-primary h-48 w-full"
+            className={`signal-waveform ${toneClass} h-48 w-full`}
             source={signal.visual}
-            mode={phase === 'transmitting' ? 'scope' : 'wave'}
+            mode={phase === 'transmitting' || protocol === 'ultrasound' ? 'scope' : 'wave'}
             sensitivity={phase === 'transmitting' ? 1.55 : 1.2}
             lineWidth={2.5}
           />
@@ -114,7 +115,7 @@ export function SignalConsole() {
         <div className="signal-spectrum">
           <BarVisualizer
             aria-label="Animated signal frequency spectrum"
-            className="text-primary h-14 w-full"
+            className={`${toneClass} h-14 w-full`}
             source={signal.visual}
             barCount={32}
             align="center"
@@ -126,20 +127,23 @@ export function SignalConsole() {
 
       <div className="console-settings">
         <div className="protocol-switch" role="group" aria-label="Signal protocol">
-          <button
-            type="button"
-            aria-pressed={protocol === 'audible'}
-            onClick={() => changeProtocol('audible')}
-          >
-            Audible
-          </button>
-          <button
-            type="button"
-            aria-pressed={protocol === 'ultrasound'}
-            onClick={() => changeProtocol('ultrasound')}
-          >
-            Ultrasound
-          </button>
+          {(['audible', 'ultrasound'] as const).map((item) => (
+            <button
+              key={item}
+              type="button"
+              aria-pressed={protocol === item}
+              onClick={() => changeProtocol(item)}
+            >
+              {protocol === item && (
+                <motion.span
+                  className="switch-pill"
+                  layoutId="console-protocol-pill"
+                  transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 460, damping: 36 }}
+                />
+              )}
+              <span className="switch-label">{item === 'audible' ? 'Audible' : 'Ultrasound'}</span>
+            </button>
+          ))}
         </div>
         <VolumeControl
           value={volume}

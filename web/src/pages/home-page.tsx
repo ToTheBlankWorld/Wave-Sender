@@ -14,10 +14,14 @@ import {
   WifiOff,
   Waves,
 } from 'lucide-react'
+import { motion } from 'motion/react'
 import { Link } from 'react-router-dom'
 import { ContourField } from '@/components/contour-field'
 import { ProtocolLab } from '@/components/protocol-lab'
 import { SignalConsole } from '@/components/signal-console'
+import { useReducedMotion } from '@/hooks/use-reduced-motion'
+
+const easeCurve = [0.22, 1, 0.36, 1] as const
 
 const steps = [
   {
@@ -64,6 +68,16 @@ const faqs = [
 ]
 
 export function HomePage() {
+  const reduceMotion = useReducedMotion()
+  const reveal = (delay = 0) => reduceMotion
+    ? {}
+    : {
+        initial: { opacity: 0, y: 16 },
+        whileInView: { opacity: 1, y: 0 },
+        viewport: { once: true, amount: 0.18 },
+        transition: { duration: 0.5, delay, ease: easeCurve },
+      }
+
   return (
     <div className="home-page">
       <section className="hero section-wrap">
@@ -116,7 +130,7 @@ export function HomePage() {
         </div>
         <div className="path-steps">
           {steps.map((step, index) => (
-            <article className="path-step" key={step.title}>
+            <motion.article className="path-step" key={step.title} {...reveal(index * 0.06)}>
               <div className="path-step-meta">
                 <span className="step-number">0{index + 1}</span>
                 <span className="step-detail">{step.detail}</span>
@@ -126,7 +140,7 @@ export function HomePage() {
               <div className="step-signal" aria-hidden="true">
                 <span /><span /><span /><span /><span /><span /><span /><span /><span />
               </div>
-            </article>
+            </motion.article>
           ))}
         </div>
       </section>
@@ -134,7 +148,7 @@ export function HomePage() {
       <section className="privacy-section" id="privacy">
         <ContourField className="contour-field" />
         <div className="section-wrap privacy-grid">
-          <div className="privacy-copy">
+          <motion.div className="privacy-copy" {...reveal(0)}>
             <p className="section-kicker"><LockKeyhole size={16} /> Private by proximity</p>
             <h2>The message stays close.<br />So does the history.</h2>
             <p>
@@ -145,9 +159,9 @@ export function HomePage() {
               <li><Check size={16} /> History is stored in this browser</li>
               <li><Check size={16} /> Clear received messages at any time</li>
             </ul>
-          </div>
+          </motion.div>
 
-          <div className="history-preview" aria-label="Example of local message history">
+          <motion.div className="history-preview" aria-label="Example of local message history" {...reveal(0.08)}>
             <div className="history-preview-header">
               <span><History size={16} /> Received</span>
               <span className="local-badge"><span className="status-dot" /> On this device</span>
@@ -181,7 +195,7 @@ export function HomePage() {
             <div className="history-preview-footer">
               <LockKeyhole size={14} /> Local browser storage · nothing uploaded
             </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 
@@ -210,11 +224,11 @@ export function HomePage() {
         </div>
         <div className="use-case-list">
           {useCases.map((useCase, index) => (
-            <article className="use-case" key={useCase.title}>
+            <motion.article className="use-case" key={useCase.title} {...reveal(index * 0.05)}>
               <span className="use-case-index">0{index + 1}</span>
               <h3>{useCase.title}</h3>
               <p>{useCase.text}</p>
-            </article>
+            </motion.article>
           ))}
         </div>
       </section>
@@ -236,14 +250,14 @@ export function HomePage() {
 
       <section className="final-cta section-wrap" id="get-started">
         <div className="cta-rings" aria-hidden="true"><span /><span /><span /><span /></div>
-        <div className="final-cta-content">
+        <motion.div className="final-cta-content" {...reveal(0)}>
           <p className="section-kicker">Your next message can travel through air</p>
           <h2>Ready to make<br />some noise?</h2>
           <p>Open the studio, write something short, and let a nearby device listen.</p>
           <Link className="button-primary" to="/studio">
             Launch the studio <ArrowRight size={17} />
           </Link>
-        </div>
+        </motion.div>
       </section>
     </div>
   )

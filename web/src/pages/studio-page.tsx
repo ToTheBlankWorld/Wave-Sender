@@ -12,7 +12,8 @@ import {
   Volume2,
   Waves,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   AudioDeviceSelect,
@@ -39,6 +40,7 @@ export function StudioPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [previewPaused, setPreviewPaused] = useState(false)
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reduceMotion = useReducedMotion()
   const demo = useDemoSignal({
     kind: store.isTransmitting ? 'tone' : 'speech',
@@ -46,6 +48,7 @@ export function StudioPage() {
     playing: !store.isReceiving && !previewPaused && !reduceMotion,
   })
   const bytes = encoder.encode(message).length
+  const byteRatio = Math.min(1, bytes / MAX_PAYLOAD_BYTES)
   const deviceOptions = useMemo(() => store.devices.map((device) => ({
     id: device.id,
     label: device.label,
@@ -53,7 +56,12 @@ export function StudioPage() {
   })), [store.devices])
   const receiveActive = mode === 'receive' && store.isReceiving
   const monitorSource = receiveActive ? store.visualSource : demo.visual
-  const monitorAnimated = receiveActive || (mode === 'send' && !previewPaused && !reduceMotion)
+  const showWaveform = receiveActive || (mode === 'send' && !previewPaused && !reduceMotion)
+  const showSpectrum = showWaveform || (mode === 'receive' && !reduceMotion)
+
+  useEffect(() => () => {
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+  }, [])
 
   const switchMode = (next: 'send' | 'receive') => {
     if (next === 'send') store.stopReceiving()
@@ -87,7 +95,8 @@ export function StudioPage() {
     try {
       await copyText(store.lastDecoded)
       setCopied(true)
-      setTimeout(() => setCopied(false), 1600)
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+      copyTimerRef.current = setTimeout(() => setCopied(false), 1600)
     } catch {
       setActionError('The message could not be copied. Select it and copy it manually.')
     }
@@ -117,7 +126,14 @@ export function StudioPage() {
           className={mode === 'send' ? 'active' : ''}
           onClick={() => switchMode('send')}
         >
-          <Send size={17} /> Send
+          {mode === 'send' && (
+            <motion.span
+              className="tab-pill tab-pill-send"
+              layoutId="studio-mode-pill"
+              transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 460, damping: 36 }}
+            />
+          )}
+          <span className="switch-label"><Send size={17} /> Send</span>
         </button>
         <button
           id="studio-receive-tab"
@@ -129,7 +145,14 @@ export function StudioPage() {
           className={mode === 'receive' ? 'active' : ''}
           onClick={() => switchMode('receive')}
         >
-          <Mic size={17} /> Receive
+          {mode === 'receive' && (
+            <motion.span
+              className="tab-pill tab-pill-receive"
+              layoutId="studio-mode-pill"
+              transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 460, damping: 36 }}
+            />
+          )}
+          <span className="switch-label"><Mic size={17} /> Receive</span>
         </button>
       </div>
 
@@ -146,122 +169,172 @@ export function StudioPage() {
           role="tabpanel"
           aria-labelledby={`studio-${mode}-tab`}
         >
-          {mode === 'send' ? (
-            <>
-              <div className="control-heading">
-                <span className="control-icon"><Send size={20} /></span>
-                <div>
-                  <h2>Compose a message</h2>
-                  <p>Short text or a link, encoded into sound.</p>
-                </div>
-              </div>
-
-              <label className="field-label" htmlFor="wave-message">Message</label>
-              <div className={`message-field ${bytes > MAX_PAYLOAD_BYTES ? 'invalid' : ''}`}>
-                <textarea
-                  id="wave-message"
-                  name="message"
-                  autoComplete="off"
-                  value={message}
-                  maxLength={160}
-                  aria-invalid={bytes > MAX_PAYLOAD_BYTES}
-                  aria-describedby="wave-message-meta"
-                  onChange={(event) => setMessage(event.target.value)}
-                  placeholder="Write something worth carrying…"
-                />
-                <div className="message-meta" id="wave-message-meta">
-                  <button type="button" onClick={() => setMessage('Meet me by the north gate.')}>Use sample</button>
-                  <span className={bytes > MAX_PAYLOAD_BYTES ? 'over-limit' : ''}>
-                    {bytes} / {MAX_PAYLOAD_BYTES} bytes{bytes > MAX_PAYLOAD_BYTES ? ` · Shorten by ${bytes - MAX_PAYLOAD_BYTES}` : ''}
-                  </span>
-                </div>
-              </div>
-
-              <div className="control-block">
-                <span className="field-label">Protocol</span>
-                <div className="protocol-switch studio-protocol" role="group" aria-label="Transmission protocol">
-                  <button type="button" aria-pressed={store.settings.protocol === 'audible'} onClick={() => store.updateSettings({ protocol: 'audible' })}>Audible</button>
-                  <button type="button" aria-pressed={store.settings.protocol === 'ultrasound'} onClick={() => store.updateSettings({ protocol: 'ultrasound' })}>Ultrasound</button>
-                </div>
-              </div>
-
-              <div className="control-block volume-block">
-                <span className="field-label"><Volume2 size={15} /> Playback volume</span>
-                <VolumeControl
-                  value={store.settings.volume}
-                  onValueChange={(volume) => store.updateSettings({ volume })}
-                  curve="perceptual"
-                  aria-label="Playback volume"
-                />
-              </div>
-
-              <button
-                className="button-primary studio-action"
-                type="button"
-                disabled={!message.trim() || bytes > MAX_PAYLOAD_BYTES || store.isTransmitting}
-                onClick={transmit}
+          <AnimatePresence mode="wait">
+            {mode === 'send' ? (
+              <motion.div
+                key="send-panel"
+                className="studio-panel-body"
+                initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] }}
               >
-                {store.isTransmitting ? <><LoaderCircle className="spin" size={17} /> Transmitting…</> : <><Waves size={17} /> Transmit signal</>}
-              </button>
-              <p className="control-help">Keep the receiving device nearby and raise the volume gradually.</p>
-            </>
-          ) : (
-            <>
-              <div className="control-heading">
-                <span className="control-icon"><Mic size={20} /></span>
-                <div>
-                  <h2>Listen for a signal</h2>
-                  <p>Capture starts only after you allow the microphone.</p>
-                </div>
-              </div>
-
-              <div className="receive-state-card">
-                <div className={`receive-orb ${receiveActive ? 'active' : ''}`} aria-hidden="true">
-                  <span /><span /><span /><Mic size={24} />
-                </div>
-                <h3>{store.isStarting ? 'Opening microphone…' : receiveActive ? 'Listening now' : 'Ready to receive'}</h3>
-                <p>{receiveActive ? 'Keep this page active while the nearby device transmits.' : 'Press Start receiving, then allow microphone access.'}</p>
-                <button
-                  className={`button-primary studio-action ${receiveActive ? 'stop-action' : ''}`}
-                  type="button"
-                  disabled={store.isStarting}
-                  onClick={() => receiveActive || store.isStarting ? store.stopReceiving() : store.startReceiving()}
-                >
-                  {store.isStarting ? <><LoaderCircle className="spin" size={17} /> Starting…</> : receiveActive ? <><Square size={16} /> Stop receiving</> : <><Mic size={17} /> Start receiving</>}
-                </button>
-              </div>
-
-              {store.lastDecoded && (
-                <div className="decoded-result" role="status" aria-live="polite">
-                  <div className="decoded-result-top">
-                    <span><Check size={15} /> Message decoded</span>
-                    <button type="button" onClick={copyDecoded}>{copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy'}</button>
+                <div className="control-heading">
+                  <span className="control-icon"><Send size={20} /></span>
+                  <div>
+                    <h2>Compose a message</h2>
+                    <p>Short text or a link, encoded into sound.</p>
                   </div>
-                  <p>{store.lastDecoded}</p>
                 </div>
-              )}
 
-              <div className="control-block device-block">
-                <label className="field-label" htmlFor="wave-microphone">Microphone</label>
-                <AudioDeviceSelect
-                  devices={deviceOptions}
-                  value={store.settings.inputDeviceId}
-                  onValueChange={(inputDeviceId) => store.updateSettings({ inputDeviceId })}
-                  allowNone
-                  noneLabel="System default"
-                  loading={store.isLoadingDevices}
-                  permission={store.devicePermission === 'unsupported' ? 'prompt' : store.devicePermission}
-                  onRequestPermission={() => void store.requestDevicePermission()}
+                <div>
+                  <label className="field-label" htmlFor="wave-message">Message</label>
+                  <div className={`message-field ${bytes > MAX_PAYLOAD_BYTES ? 'invalid' : ''}`}>
+                    <textarea
+                      id="wave-message"
+                      name="message"
+                      autoComplete="off"
+                      value={message}
+                      maxLength={160}
+                      aria-invalid={bytes > MAX_PAYLOAD_BYTES}
+                      aria-describedby="wave-message-meta"
+                      onChange={(event) => setMessage(event.target.value)}
+                      placeholder="Write something worth carrying…"
+                    />
+                    <div className="byte-meter" aria-hidden="true">
+                      <span
+                        className={bytes > MAX_PAYLOAD_BYTES ? 'over' : byteRatio > 0.85 ? 'near' : ''}
+                        style={{ transform: `scaleX(${byteRatio})` }}
+                      />
+                    </div>
+                    <div className="message-meta" id="wave-message-meta">
+                      <button type="button" onClick={() => setMessage('Meet me by the north gate.')}>Use sample</button>
+                      <span className={bytes > MAX_PAYLOAD_BYTES ? 'over-limit' : ''}>
+                        {bytes} / {MAX_PAYLOAD_BYTES} bytes{bytes > MAX_PAYLOAD_BYTES ? ` · Shorten by ${bytes - MAX_PAYLOAD_BYTES}` : ''}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="control-block">
+                  <span className="field-label">Protocol</span>
+                  <div className="protocol-switch studio-protocol" role="group" aria-label="Transmission protocol">
+                    {(['audible', 'ultrasound'] as const).map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        aria-pressed={store.settings.protocol === item}
+                        onClick={() => store.updateSettings({ protocol: item })}
+                      >
+                        {store.settings.protocol === item && (
+                          <motion.span
+                            className="switch-pill"
+                            layoutId="studio-protocol-pill"
+                            transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 460, damping: 36 }}
+                          />
+                        )}
+                        <span className="switch-label">{item === 'audible' ? 'Audible' : 'Ultrasound'}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="control-block volume-block">
+                  <span className="field-label"><Volume2 size={15} /> Playback volume</span>
+                  <VolumeControl
+                    value={store.settings.volume}
+                    onValueChange={(volume) => store.updateSettings({ volume })}
+                    curve="perceptual"
+                    aria-label="Playback volume"
+                  />
+                </div>
+
+                <button
+                  className={`button-primary studio-action ${store.isTransmitting ? 'is-transmitting' : ''}`}
+                  type="button"
+                  disabled={!message.trim() || bytes > MAX_PAYLOAD_BYTES || store.isTransmitting}
+                  onClick={transmit}
                 >
-                  <AudioDeviceSelectTrigger id="wave-microphone">
-                    <AudioDeviceSelectValue />
-                  </AudioDeviceSelectTrigger>
-                </AudioDeviceSelect>
-              </div>
+                  {store.isTransmitting ? <><LoaderCircle className="spin" size={17} /> Transmitting…</> : <><Waves size={17} /> Transmit signal</>}
+                </button>
+                <p className="control-help">Keep the receiving device nearby and raise the volume gradually.</p>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="receive-panel"
+                className="studio-panel-body"
+                initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <div className="control-heading">
+                  <span className="control-icon control-icon-receive"><Mic size={20} /></span>
+                  <div>
+                    <h2>Listen for a signal</h2>
+                    <p>Capture starts only after you allow the microphone.</p>
+                  </div>
+                </div>
 
-              <Link className="text-link" to="/history">Open received history <ArrowUpRight size={15} /></Link>
-            </>
-          )}
+                <div className="receive-state-card">
+                  <div className={`receive-orb ${receiveActive ? 'active' : ''}`} aria-hidden="true">
+                    <span /><span /><span /><Mic size={24} />
+                  </div>
+                  <h3>{store.isStarting ? 'Opening microphone…' : receiveActive ? 'Listening now' : 'Ready to receive'}</h3>
+                  <p>{receiveActive ? 'Keep this page active while the nearby device transmits.' : 'Press Start receiving, then allow microphone access.'}</p>
+                  <button
+                    className={`button-primary studio-action ${receiveActive ? 'stop-action' : ''}`}
+                    type="button"
+                    disabled={store.isStarting}
+                    onClick={() => receiveActive || store.isStarting ? store.stopReceiving() : store.startReceiving()}
+                  >
+                    {store.isStarting ? <><LoaderCircle className="spin" size={17} /> Starting…</> : receiveActive ? <><Square size={16} /> Stop receiving</> : <><Mic size={17} /> Start receiving</>}
+                  </button>
+                </div>
+
+                <AnimatePresence>
+                  {store.lastDecoded && (
+                    <motion.div
+                      key={store.lastDecoded}
+                      className="decoded-result"
+                      role="status"
+                      aria-live="polite"
+                      initial={reduceMotion ? false : { opacity: 0, y: 8, scale: 0.985 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                      transition={{ duration: reduceMotion ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      <div className="decoded-result-top">
+                        <span><Check size={15} /> Message decoded</span>
+                        <button type="button" onClick={copyDecoded}>{copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy'}</button>
+                      </div>
+                      <p>{store.lastDecoded}</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <div className="control-block device-block">
+                  <label className="field-label" htmlFor="wave-microphone">Microphone</label>
+                  <AudioDeviceSelect
+                    devices={deviceOptions}
+                    value={store.settings.inputDeviceId}
+                    onValueChange={(inputDeviceId) => store.updateSettings({ inputDeviceId })}
+                    allowNone
+                    noneLabel="System default"
+                    loading={store.isLoadingDevices}
+                    permission={store.devicePermission === 'unsupported' ? 'prompt' : store.devicePermission}
+                    onRequestPermission={() => void store.requestDevicePermission()}
+                  >
+                    <AudioDeviceSelectTrigger id="wave-microphone">
+                      <AudioDeviceSelectValue />
+                    </AudioDeviceSelectTrigger>
+                  </AudioDeviceSelect>
+                </div>
+
+                <Link className="text-link" to="/history">Open received history <ArrowUpRight size={15} /></Link>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </section>
 
         <section className="studio-monitor" aria-label="Live signal monitor">
@@ -282,10 +355,10 @@ export function StudioPage() {
               )}
             </div>
           </div>
-          <div className="monitor-screen">
+          <div className={`monitor-screen ${receiveActive || store.isTransmitting ? 'is-active' : ''}`}>
             <div className="wave-grid" aria-hidden="true" />
             <WaveBackdrop className={mode === 'receive' ? 'text-accent' : 'text-primary'} />
-            {monitorAnimated && (
+            {showWaveform && (
               <SmoothWaveform
                 aria-label={mode === 'send' ? 'Transmission waveform' : 'Microphone waveform'}
                 className={`monitor-waveform ${mode === 'receive' ? 'text-accent' : 'text-primary'}`}
@@ -295,23 +368,33 @@ export function StudioPage() {
                 lineWidth={2.2}
               />
             )}
-            {mode === 'receive' && store.lastDecoded && (
-              <div className="decoded-message" aria-live="polite">
-                <span className="decoded-check"><Check size={15} /></span>
-                <span>{store.lastDecoded}</span>
-              </div>
-            )}
+            <AnimatePresence>
+              {mode === 'receive' && store.lastDecoded && (
+                <motion.div
+                  key={store.lastDecoded}
+                  className="decoded-message"
+                  aria-live="polite"
+                  initial={reduceMotion ? false : { opacity: 0, y: 10, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                  transition={{ duration: reduceMotion ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <span className="decoded-check"><Check size={15} /></span>
+                  <span>{store.lastDecoded}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
             <div className="monitor-readout">
               <span>{mode === 'send' ? store.settings.protocol : receiveActive ? 'MIC 01' : 'MIC —'}</span>
               <span>{mode === 'send' ? `${bytes} bytes` : receiveActive ? '48 kHz decoder' : store.lastDecoded ? 'Decoded' : 'No capture'}</span>
             </div>
           </div>
-          {monitorAnimated && (
+          {showSpectrum && (
             <div className="monitor-spectrum">
               <BarVisualizer
                 aria-label="Live frequency spectrum"
                 className={`${mode === 'receive' ? 'text-accent' : 'text-primary'} h-16 w-full`}
-                source={monitorSource}
+                source={showWaveform ? monitorSource : null}
                 barCount={36}
                 align="center"
                 mirrored

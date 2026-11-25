@@ -1,8 +1,10 @@
 import { ArrowUpRight, Menu, X } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
-import { BrandMark, GithubMark } from './brand-mark'
+import { useReducedMotion } from '@/hooks/use-reduced-motion'
 import { useWaveStore } from '@/store/wave-store'
+import { BrandMark, GithubMark } from './brand-mark'
 
 const navigation = [
   { to: '/', label: 'Overview' },
@@ -16,6 +18,7 @@ export function SiteLayout() {
   const location = useLocation()
   const menuOpen = openMenuPath === location.pathname
   const { stopReceiving } = useWaveStore()
+  const reduceMotion = useReducedMotion()
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' })
@@ -38,16 +41,28 @@ export function SiteLayout() {
           </Link>
 
           <nav className="desktop-nav" aria-label="Main navigation">
-            {navigation.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
-              >
-                {item.label}
-              </NavLink>
-            ))}
+            {navigation.map((item) => {
+              const active = item.to === '/'
+                ? location.pathname === '/'
+                : location.pathname.startsWith(item.to)
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/'}
+                  className={active ? 'nav-link active' : 'nav-link'}
+                >
+                  <span>{item.label}</span>
+                  {active && (
+                    <motion.span
+                      className="nav-indicator"
+                      layoutId="desktop-nav-indicator"
+                      transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 460, damping: 36 }}
+                    />
+                  )}
+                </NavLink>
+              )
+            })}
           </nav>
 
           <div className="header-actions">
@@ -75,21 +90,30 @@ export function SiteLayout() {
           </div>
         </div>
 
-        {menuOpen && (
-          <nav className="mobile-nav" aria-label="Mobile navigation">
-            {navigation.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
-                onClick={() => setOpenMenuPath(null)}
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-        )}
+        <AnimatePresence initial={false}>
+          {menuOpen && (
+            <motion.nav
+              className="mobile-nav"
+              aria-label="Mobile navigation"
+              initial={reduceMotion ? false : { opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
+              transition={{ duration: reduceMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {navigation.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/'}
+                  className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
+                  onClick={() => setOpenMenuPath(null)}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </motion.nav>
+          )}
+        </AnimatePresence>
       </header>
 
       <main id="main-content">

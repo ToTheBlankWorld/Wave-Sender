@@ -1,4 +1,5 @@
 import { Ear, Pause, Play, Radio, Volume2, Waves } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useState } from 'react'
 import { BarVisualizer } from '@/components/ui/bar-visualizer'
 import { SmoothWaveform } from '@/components/ui/smooth-waveform'
@@ -22,20 +23,25 @@ export function ProtocolLab() {
   return (
     <div className="protocol-lab">
       <div className="protocol-tabs" role="group" aria-label="Choose a signal protocol">
-        <button
-          type="button"
-          aria-pressed={protocol === 'audible'}
-          onClick={() => setProtocol('audible')}
-        >
-          <Volume2 size={17} /> Audible
-        </button>
-        <button
-          type="button"
-          aria-pressed={protocol === 'ultrasound'}
-          onClick={() => setProtocol('ultrasound')}
-        >
-          <Waves size={17} /> Ultrasound
-        </button>
+        {(['audible', 'ultrasound'] as const).map((item) => (
+          <button
+            key={item}
+            type="button"
+            aria-pressed={protocol === item}
+            onClick={() => setProtocol(item)}
+          >
+            {protocol === item && (
+              <motion.span
+                className="switch-pill"
+                layoutId="lab-protocol-pill"
+                transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 460, damping: 36 }}
+              />
+            )}
+            <span className="switch-label">
+              {item === 'audible' ? <><Volume2 size={17} /> Audible</> : <><Waves size={17} /> Ultrasound</>}
+            </span>
+          </button>
+        ))}
       </div>
 
       <div className="protocol-screen">
@@ -79,17 +85,26 @@ export function ProtocolLab() {
         )}
       </div>
 
-      <div className="protocol-description">
-        {protocol === 'audible' ? <Ear size={22} /> : <Waves size={22} />}
-        <div>
-          <h3>{protocol === 'audible' ? 'Easy to hear. Easy to share.' : 'A quieter channel for nearby devices.'}</h3>
-          <p>
-            {protocol === 'audible'
-              ? 'A familiar audio signal that works with standard phone and laptop speakers. Best for demos, classrooms, and quick handoffs.'
-              : 'A high-frequency signal designed to be less intrusive. Device support varies, so audible mode remains the reliable fallback.'}
-          </p>
-        </div>
-      </div>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={protocol}
+          className="protocol-description"
+          initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+          transition={{ duration: reduceMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {protocol === 'audible' ? <Ear size={22} /> : <Waves size={22} />}
+          <div>
+            <h3>{protocol === 'audible' ? 'Easy to hear. Easy to share.' : 'A quieter channel for nearby devices.'}</h3>
+            <p>
+              {protocol === 'audible'
+                ? 'A familiar audio signal that works with standard phone and laptop speakers. Best for demos, classrooms, and quick handoffs.'
+                : 'A high-frequency signal designed to be less intrusive. Device support varies, so audible mode remains the reliable fallback.'}
+            </p>
+          </div>
+        </motion.div>
+      </AnimatePresence>
     </div>
   )
 }

@@ -1,11 +1,13 @@
-import { Eye, Mic, Radio, Trash2, Vibrate, Volume2, Waves } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { Eye, Mic, Radio, Trash2, Vibrate, Volume2, Waves, X } from 'lucide-react'
+import { motion } from 'motion/react'
+import { useState, type ReactNode } from 'react'
 import {
   AudioDeviceSelect,
   AudioDeviceSelectTrigger,
   AudioDeviceSelectValue,
 } from '@/components/ui/audio-device-select'
 import { VolumeControl } from '@/components/ui/volume-control'
+import { useReducedMotion } from '@/hooks/use-reduced-motion'
 import { useWaveStore } from '@/store/wave-store'
 
 function SettingToggle({
@@ -53,6 +55,8 @@ function SettingRow({
 
 export function SettingsPage() {
   const store = useWaveStore()
+  const [confirmClear, setConfirmClear] = useState(false)
+  const reduceMotion = useReducedMotion()
   const deviceOptions = store.devices.map((device) => ({
     id: device.id,
     label: device.label,
@@ -73,8 +77,23 @@ export function SettingsPage() {
         <h2>Audio</h2>
         <SettingRow icon={<Waves size={19} />} title="Protocol" description="Audible is the most compatible. Ultrasound needs supporting hardware.">
           <div className="protocol-switch settings-protocol" role="group" aria-label="Default protocol">
-            <button type="button" aria-pressed={store.settings.protocol === 'audible'} onClick={() => store.updateSettings({ protocol: 'audible' })}>Audible</button>
-            <button type="button" aria-pressed={store.settings.protocol === 'ultrasound'} onClick={() => store.updateSettings({ protocol: 'ultrasound' })}>Ultrasound</button>
+            {(['audible', 'ultrasound'] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                aria-pressed={store.settings.protocol === item}
+                onClick={() => store.updateSettings({ protocol: item })}
+              >
+                {store.settings.protocol === item && (
+                  <motion.span
+                    className="switch-pill"
+                    layoutId="settings-protocol-pill"
+                    transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 460, damping: 36 }}
+                  />
+                )}
+                <span className="switch-label">{item === 'audible' ? 'Audible' : 'Ultrasound'}</span>
+              </button>
+            ))}
           </div>
         </SettingRow>
         <SettingRow icon={<Volume2 size={19} />} title="Playback volume" description="Used when a signal is transmitted from this browser.">
@@ -114,16 +133,32 @@ export function SettingsPage() {
           <h2>Local data</h2>
           <p>Received messages and preferences never leave this browser.</p>
         </div>
-        <button
-          className="button-secondary danger-button"
-          type="button"
-          disabled={store.history.length === 0}
-          onClick={() => {
-            if (window.confirm('Clear all received messages from this browser?')) store.clearHistory()
-          }}
-        >
-          <Trash2 size={16} /> Clear received history
-        </button>
+        {confirmClear && store.history.length > 0 ? (
+          <div className="confirm-inline" role="group" aria-label="Confirm clearing history">
+            <button
+              className="button-secondary danger-confirm"
+              type="button"
+              onClick={() => {
+                store.clearHistory()
+                setConfirmClear(false)
+              }}
+            >
+              <Trash2 size={15} /> Confirm clear
+            </button>
+            <button className="icon-button" type="button" aria-label="Cancel clear" onClick={() => setConfirmClear(false)}>
+              <X size={16} />
+            </button>
+          </div>
+        ) : (
+          <button
+            className="button-secondary danger-button"
+            type="button"
+            disabled={store.history.length === 0}
+            onClick={() => setConfirmClear(true)}
+          >
+            <Trash2 size={16} /> Clear received history
+          </button>
+        )}
       </div>
     </div>
   )

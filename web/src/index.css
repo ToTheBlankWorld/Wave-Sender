@@ -73,19 +73,12 @@
   --color-channel-mute-foreground: var(--channel-mute-foreground);
   --color-channel-solo-foreground: var(--channel-solo-foreground);
   --color-channel-monitor-foreground: var(--channel-monitor-foreground);
-  --channel-monitor-foreground: var(--channel-monitor-foreground);
-  --channel-solo-foreground: var(--channel-solo-foreground);
-  --channel-mute-foreground: var(--channel-mute-foreground);
-  --meter-clip-foreground: var(--meter-clip-foreground);
-  --meter-warn-foreground: var(--meter-warn-foreground);
-  --meter-ok-foreground: var(--meter-ok-foreground);
-  --channel-mute: var(--channel-mute);
-  --meter-clip: var(--meter-clip);
 }
 
 @theme {
   --font-sans: "DM Sans Variable", sans-serif;
   --font-display: "Bricolage Grotesque Variable", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
 * {
@@ -256,7 +249,7 @@ button {
   color: var(--foreground);
 }
 
-.nav-link.active::after {
+.nav-indicator {
   position: absolute;
   right: 0.9rem;
   bottom: 0.25rem;
@@ -264,7 +257,6 @@ button {
   height: 2px;
   border-radius: 999px;
   background: var(--primary);
-  content: "";
 }
 
 .header-actions {
@@ -310,7 +302,8 @@ button {
   font-size: 0.93rem;
   font-weight: 650;
   line-height: 1;
-  transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+  cursor: pointer;
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .button-primary {
@@ -320,9 +313,14 @@ button {
   box-shadow: 0 12px 35px rgba(140, 232, 215, 0.13);
 }
 
-.button-primary:hover {
+.button-primary:hover:not(:disabled) {
   background: #a7f2e4;
   transform: translateY(-2px);
+}
+
+.button-primary:active:not(:disabled),
+.button-secondary:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
 }
 
 .button-secondary {
@@ -331,9 +329,15 @@ button {
   background: rgba(255, 255, 255, 0.025);
 }
 
-.button-secondary:hover {
+.button-secondary:hover:not(:disabled) {
   border-color: rgba(140, 232, 215, 0.4);
   background: rgba(140, 232, 215, 0.06);
+}
+
+.button-primary:disabled,
+.button-secondary:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
 }
 
 .header-cta {
@@ -687,6 +691,8 @@ button {
   }
 
   .mobile-nav {
+    display: grid;
+    overflow: hidden;
     padding: 0.5rem 1.5rem 1.2rem;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0.4rem;
@@ -887,6 +893,7 @@ button {
 }
 
 .protocol-switch button {
+  position: relative;
   padding: 0.55rem 0.7rem;
   color: var(--muted-foreground);
   border: 0;
@@ -895,12 +902,28 @@ button {
   font-size: 0.72rem;
   font-weight: 600;
   cursor: pointer;
+  transition: color 160ms ease;
 }
 
 .protocol-switch button[aria-pressed="true"] {
   color: var(--foreground);
+}
+
+.switch-pill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
   background: var(--secondary);
   box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.switch-label {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 .console-volume {
@@ -1115,6 +1138,7 @@ button {
   align-items: center;
   gap: 0.38rem;
   opacity: 0.55;
+  transition: opacity 220ms ease;
 }
 
 .step-signal span {
@@ -1122,6 +1146,15 @@ button {
   height: 30%;
   border-radius: 999px;
   background: var(--primary);
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease;
+}
+
+.path-step:hover .step-signal {
+  opacity: 0.95;
+}
+
+.path-step:hover .step-signal span {
+  transform: scaleY(1.22);
 }
 
 .step-signal span:nth-child(2),
@@ -1325,6 +1358,7 @@ button {
 }
 
 .protocol-tabs button {
+  position: relative;
   display: inline-flex;
   padding: 0.7rem 0.9rem;
   align-items: center;
@@ -1336,12 +1370,11 @@ button {
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
+  transition: color 160ms ease;
 }
 
 .protocol-tabs button[aria-pressed="true"] {
   color: var(--foreground);
-  border-color: var(--border);
-  background: var(--secondary);
 }
 
 .protocol-screen {
@@ -1580,14 +1613,20 @@ button {
   left: 50%;
   width: 18rem;
   height: 18rem;
-  border: 1px solid rgba(140, 232, 215, 0.13);
+  border: 1px solid rgba(140, 232, 215, 0.14);
   border-radius: 50%;
   transform: translate(-50%, -50%);
+  animation: cta-ring-pulse 6.5s ease-in-out infinite;
 }
 
-.cta-rings span:nth-child(2) { width: 30rem; height: 30rem; }
-.cta-rings span:nth-child(3) { width: 44rem; height: 44rem; }
-.cta-rings span:nth-child(4) { width: 60rem; height: 60rem; }
+.cta-rings span:nth-child(2) { width: 30rem; height: 30rem; animation-delay: 1.4s; }
+.cta-rings span:nth-child(3) { width: 44rem; height: 44rem; animation-delay: 2.8s; }
+.cta-rings span:nth-child(4) { width: 60rem; height: 60rem; animation-delay: 4.2s; }
+
+@keyframes cta-ring-pulse {
+  0%, 100% { opacity: 0.55; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.035); }
+}
 
 @keyframes spin {
   to { transform: rotate(360deg); }
@@ -1772,6 +1811,7 @@ button {
   border-radius: 999px;
   color: var(--muted-foreground);
   background: color-mix(in srgb, var(--card) 70%, transparent);
+  cursor: pointer;
   transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
 }
 
@@ -1890,6 +1930,7 @@ button {
 }
 
 .studio-tabs button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
@@ -1900,16 +1941,30 @@ button {
   color: var(--muted-foreground);
   font-size: 0.86rem;
   font-weight: 620;
-  transition: color 160ms ease, background 160ms ease;
+  cursor: pointer;
+  transition: color 160ms ease;
 }
 
-.studio-tabs button.active {
-  color: var(--foreground);
+.tab-pill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.tab-pill-send {
   background: var(--primary);
+}
+
+.tab-pill-receive {
+  background: var(--accent);
 }
 
 .studio-tabs button:first-child.active {
   color: var(--primary-foreground);
+}
+
+.studio-tabs button:last-child.active {
+  color: var(--accent-foreground);
 }
 
 .studio-error {
@@ -1938,10 +1993,19 @@ button {
 }
 
 .studio-controls {
+  padding: clamp(1.2rem, 3vw, 2rem);
+}
+
+.studio-panel-body {
   display: flex;
   flex-direction: column;
   gap: 1.35rem;
-  padding: clamp(1.2rem, 3vw, 2rem);
+}
+
+.control-icon-receive {
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border));
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .control-heading {
@@ -2028,6 +2092,28 @@ button {
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 55%, transparent);
 }
 
+.byte-meter {
+  height: 2px;
+  background: color-mix(in srgb, var(--border) 65%, transparent);
+}
+
+.byte-meter span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary);
+  transform-origin: left center;
+  transition: transform 140ms ease, background 160ms ease;
+}
+
+.byte-meter span.near {
+  background: var(--meter-warn);
+}
+
+.byte-meter span.over {
+  background: var(--destructive);
+}
+
 .message-meta {
   display: flex;
   justify-content: space-between;
@@ -2040,6 +2126,7 @@ button {
 
 .message-meta button {
   color: var(--primary);
+  cursor: pointer;
 }
 
 .over-limit {
@@ -2134,6 +2221,23 @@ button {
   min-height: 22rem;
   flex: 1;
   overflow: hidden;
+}
+
+.wave-stage.is-active::after,
+.monitor-screen.is-active::after {
+  position: absolute;
+  inset: 0 auto 0 -30%;
+  width: 30%;
+  z-index: 1;
+  background: linear-gradient(90deg, transparent, rgba(140, 232, 215, 0.06), transparent);
+  pointer-events: none;
+  content: "";
+  animation: scope-sweep 2.6s linear infinite;
+}
+
+@keyframes scope-sweep {
+  from { transform: translateX(0); }
+  to { transform: translateX(460%); }
 }
 
 .wave-grid {
@@ -2311,6 +2415,10 @@ button {
   gap: 0.35rem;
 }
 
+.decoded-result-top button {
+  cursor: pointer;
+}
+
 .decoded-result p {
   padding: 0.9rem;
   color: var(--foreground);
@@ -2332,9 +2440,45 @@ button {
   color: color-mix(in srgb, var(--foreground) 82%, var(--destructive));
 }
 
-.danger-button:hover {
+.danger-button:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--destructive) 45%, var(--border));
   color: var(--destructive);
+}
+
+.confirm-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.danger-confirm {
+  min-height: 2.65rem;
+  padding: 0.55rem 0.95rem;
+  border-color: color-mix(in srgb, var(--destructive) 55%, var(--border));
+  background: color-mix(in srgb, var(--destructive) 16%, transparent);
+  color: var(--destructive);
+}
+
+.danger-confirm:hover:not(:disabled) {
+  border-color: var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 24%, transparent);
+}
+
+.inline-confirm-chip {
+  height: 2.3rem;
+  padding: 0 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--destructive) 55%, var(--border));
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--destructive) 16%, transparent);
+  color: var(--destructive);
+  font-size: 0.74rem;
+  font-weight: 620;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.inline-confirm-chip:hover {
+  background: color-mix(in srgb, var(--destructive) 24%, transparent);
 }
 
 .history-list {
@@ -2523,6 +2667,7 @@ button {
   border: 0;
   border-radius: 999px;
   background: transparent;
+  cursor: pointer;
 }
 
 .setting-toggle::before {
@@ -2538,12 +2683,12 @@ button {
 
 .setting-toggle span {
   position: absolute;
-  left: calc(50% - 1.22rem);
+  left: 0.25rem;
   width: 1.05rem;
   height: 1.05rem;
   border-radius: 50%;
   background: var(--muted-foreground);
-  transition: transform 160ms ease, background 160ms ease;
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), background 160ms ease;
 }
 
 .setting-toggle[aria-checked="true"]::before {
@@ -2553,7 +2698,7 @@ button {
 
 .setting-toggle[aria-checked="true"] span {
   background: var(--primary-foreground);
-  transform: translateX(1.12rem);
+  transform: translateX(1.25rem);
 }
 
 .local-data-group {
